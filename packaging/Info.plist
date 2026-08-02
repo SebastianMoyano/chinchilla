@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.sebastian.chinchilla</string>
+	<key>CFBundleName</key>
+	<string>Chinchilla</string>
+	<key>CFBundleDisplayName</key>
+	<string>Chinchilla</string>
+	<key>CFBundleExecutable</key>
+	<string>Chinchilla</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>es</string>
+	</array>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Sebastián</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Chinchilla runs maintenance commands that may require administrator privileges.</string>
+	<key>SUFeedURL</key>
+	<string>https://REPLACE-ME.example.com/chinchilla/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>REPLACE-WITH-generate_keys-OUTPUT</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+</dict>
+</plist>

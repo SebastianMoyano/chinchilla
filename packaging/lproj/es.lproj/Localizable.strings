@@ -1,0 +1,208 @@
+/* Sidebar */
+"Dashboard" = "Panel";
+"Deep Clean" = "Limpieza profunda";
+"Disk Space" = "Espacio en disco";
+"Gaming Mode" = "Modo gaming";
+"Docker & Dev" = "Docker y Dev";
+"Coming soon" = "Próximamente";
+
+/* Dashboard */
+"Hello 👋" = "Hola 👋";
+"Your Mac at a glance" = "Tu Mac de un vistazo";
+"Startup Disk" = "Disco de arranque";
+"Quick Actions" = "Acciones rápidas";
+"Used" = "Usado";
+"Free" = "Libre";
+"Purgeable" = "Purgable";
+
+/* Disk Analyzer */
+"Folders" = "Carpetas";
+"Treemap" = "Mapa";
+"Large Files" = "Archivos grandes";
+"Scan Home Folder" = "Escanear carpeta de usuario";
+"Scan your home folder to see what's taking up space." = "Escanea tu carpeta de usuario para ver qué ocupa espacio.";
+"Scan failed" = "El escaneo falló";
+"Try Again" = "Reintentar";
+"Cancel" = "Cancelar";
+"Rescan" = "Volver a escanear";
+"Everything smaller" = "Todo lo más pequeño";
+"Smaller items" = "Elementos pequeños";
+"No large files" = "Sin archivos grandes";
+"Nothing above 100 MB was found." = "No se encontró nada mayor a 100 MB.";
+"Reveal in Finder" = "Mostrar en Finder";
+"Full Disk Access is off" = "Acceso total al disco desactivado";
+"Some folders can't be measured or cleaned without it." = "Sin él, algunas carpetas no se pueden medir ni limpiar.";
+"Open Settings" = "Abrir Ajustes";
+
+/* Deep Clean */
+"App Caches" = "Caches de apps";
+"Browser Caches" = "Caches de navegadores";
+"Logs" = "Registros";
+"Old Installers" = "Instaladores antiguos";
+"Trash" = "Papelera";
+"Developer Junk" = "Basura de desarrollo";
+"Safe" = "Seguro";
+"Review" = "Revisar";
+"Caution" = "Precaución";
+"Scan" = "Escanear";
+"Find caches, logs, old installers and developer junk. Nothing is deleted without your review." = "Encuentra caches, registros, instaladores viejos y basura de desarrollo. Nada se borra sin tu revisión.";
+"Scanning caches, logs and leftovers…" = "Escaneando caches, registros y restos…";
+"selected" = "seleccionado";
+"Preview only" = "Solo vista previa";
+"When on, nothing is deleted — you get a report of what would be removed." = "Activado, no se borra nada: obtienes un reporte de lo que se eliminaría.";
+"Preview Clean" = "Previsualizar limpieza";
+"Clean Now" = "Limpiar ahora";
+"Preview complete" = "Vista previa completa";
+"Clean complete" = "Limpieza completa";
+"would be freed" = "se liberarían";
+"freed" = "liberados";
+"Done" = "Listo";
+"Scan Again" = "Escanear de nuevo";
+"App is running" = "La app está abierta";
+"…and %lld more" = "…y %lld más";
+"%lld items skipped" = "%lld elementos omitidos";
+
+/* Docker & Dev */
+"Docker" = "Docker";
+"Docker CLI not found" = "No se encontró el CLI de Docker";
+"Docker isn't running" = "Docker no está corriendo";
+"Open Docker" = "Abrir Docker";
+"Category" = "Categoría";
+"Items" = "Ítems";
+"Size" = "Tamaño";
+"Reclaimable" = "Recuperable";
+"Safe Prune" = "Limpieza segura";
+"Deep Prune" = "Limpieza profunda";
+"Build Cache" = "Cache de build";
+"Volumes…" = "Volúmenes…";
+"This removes data Docker will have to re-download or rebuild." = "Esto elimina datos que Docker tendrá que volver a descargar o reconstruir.";
+"Delete Unused Volumes" = "Borrar volúmenes sin uso";
+"Prune" = "Limpiar";
+"Project Artifacts" = "Artefactos de proyectos";
+"node_modules, Rust targets, virtualenvs and Pods in your project folders. Deleting them is safe — the next install/build recreates them." = "node_modules, targets de Rust, virtualenvs y Pods en tus carpetas de proyectos. Borrarlos es seguro: la próxima instalación o build los recrea.";
+"No artifacts found." = "No se encontraron artefactos.";
+"Move to Trash" = "Mover a la Papelera";
+"npm, Homebrew, Xcode and other tool caches live in Deep Clean → Developer Junk." = "Los caches de npm, Homebrew, Xcode y otras herramientas están en Limpieza profunda → Basura de desarrollo.";
+"Open Deep Clean" = "Abrir Limpieza profunda";
+
+/* Gaming Mode */
+"Gaming mode is on" = "Modo gaming activado";
+"Gaming mode is off" = "Modo gaming desactivado";
+"Keeps the Mac awake, stops Time Machine backups and closes the apps you pick." = "Mantiene el Mac despierto, detiene los respaldos de Time Machine y cierra las apps que elijas.";
+"Overlay" = "Overlay";
+"Performance" = "Rendimiento";
+"Memory pressure" = "Presión de memoria";
+"Memory used" = "Memoria en uso";
+"Swap" = "Swap";
+"Thermals" = "Temperatura";
+"Normal" = "Normal";
+"Warning" = "Alerta";
+"Critical" = "Crítico";
+"Cool" = "Frío";
+"Warm" = "Tibio";
+"Hot" = "Caliente";
+"Apps to close when activating" = "Apps a cerrar al activar";
+"Closed gracefully — apps can save their work. They're relaunched with one click when you're done playing." = "Se cierran de forma segura: las apps pueden guardar su trabajo. Se relanzan con un clic cuando termines de jugar.";
+"No background apps running." = "No hay apps en segundo plano.";
+"Voice chat will disconnect" = "Se desconectará el chat de voz";
+"All tabs will close" = "Se cerrarán todas las pestañas";
+"Running containers will stop" = "Se detendrán los contenedores";
+"%lld apps were closed" = "%lld apps fueron cerradas";
+"Forget" = "Olvidar";
+"Relaunch All" = "Relanzar todas";
+"What we don't do (on purpose)" = "Lo que NO hacemos (a propósito)";
+"• No RAM \"purge\": it empties disk caches and makes things slower — macOS already manages memory well.\n• No Spotlight toggling: turning it off needs admin rights and stays off if anything crashes.\n• No FPS counter: macOS doesn't expose other apps' frame rates; anyone showing one is guessing.\n• macOS Sequoia's own Game Mode kicks in automatically when a game goes fullscreen — Chinchilla complements it instead of fighting it." = "• Sin \"purge\" de RAM: vacía los caches de disco y hace todo más lento — macOS ya gestiona bien la memoria.\n• Sin apagar Spotlight: requiere permisos de admin y queda apagado si algo falla.\n• Sin contador de FPS: macOS no expone los frames de otras apps; quien muestra uno, lo inventa.\n• El Game Mode de macOS Sequoia se activa solo cuando un juego entra a pantalla completa — Chinchilla lo complementa, no compite con él.";
+
+/* Uninstaller */
+"Uninstaller" = "Desinstalador";
+"Reading Applications…" = "Leyendo Aplicaciones…";
+"Search apps" = "Buscar apps";
+"Uninstall…" = "Desinstalar…";
+"Uninstall" = "Desinstalar";
+"Everything goes to the Trash — you can put it back." = "Todo va a la Papelera: puedes recuperarlo.";
+"Quit app first" = "Cierra la app primero";
+"No leftovers found." = "No se encontraron restos.";
+"Chinchilla can't uninstall itself." = "Chinchilla no puede desinstalarse a sí misma.";
+"Moved %lld items to Trash." = "%lld elementos movidos a la Papelera.";
+
+/* Smart Scan & Dashboard */
+"Smart Scan" = "Smart Scan";
+"One click: junk, Docker and old project artifacts." = "Un clic: basura, Docker y artefactos de proyectos viejos.";
+"reclaimable" = "recuperables";
+"Safe junk" = "Basura segura";
+"Project artifacts" = "Artefactos";
+"Last clean: %@" = "Última limpieza: %@";
+
+/* Menu bar */
+"Free space" = "Espacio libre";
+"Gaming mode" = "Modo gaming";
+"Open" = "Abrir";
+"Quit Chinchilla" = "Salir de Chinchilla";
+
+/* Onboarding */
+"Welcome to Chinchilla" = "Bienvenido a Chinchilla";
+"Clean junk, uninstall apps completely, explore your disk, optimize for gaming and keep Docker tidy — all native, all honest." = "Limpia basura, desinstala apps por completo, explora tu disco, optimiza para jugar y mantén Docker ordenado — todo nativo, todo honesto.";
+"Continue" = "Continuar";
+"Back" = "Atrás";
+"Let's go" = "¡Vamos!";
+"Full Disk Access" = "Acceso total al disco";
+"Granted — Chinchilla can clean Safari, the Trash and other protected locations." = "Concedido: Chinchilla puede limpiar Safari, la Papelera y otras ubicaciones protegidas.";
+"Optional but recommended: without it, Safari caches, the Trash and some folders can't be measured or cleaned.\n\nAdd Chinchilla with the + button, then come back here." = "Opcional pero recomendado: sin él, los caches de Safari, la Papelera y algunas carpetas no se pueden medir ni limpiar.\n\nAgrega Chinchilla con el botón +, y vuelve aquí.";
+"Open System Settings" = "Abrir Ajustes del Sistema";
+"Check again" = "Verificar de nuevo";
+"You're all set" = "Todo listo";
+"Nothing is ever deleted without your review, cleans go to the Trash when possible, and every deletion is logged. Start with a Smart Scan from the Dashboard." = "Nada se borra sin tu revisión, las limpiezas van a la Papelera cuando es posible, y cada borrado queda registrado. Empieza con un Smart Scan desde el Panel.";
+
+/* Updates */
+"Check for Updates…" = "Buscar actualizaciones…";
+
+/* Startup */
+"Startup" = "Inicio";
+"Apps that open at login are managed by macOS." = "Las apps que se abren al iniciar sesión las gestiona macOS.";
+"Open Login Items" = "Abrir Ítems de inicio";
+"Your launch agents" = "Tus launch agents";
+"Background helpers apps install for your user. Toggling off unloads them now and stops them from launching at login — flip it back anytime." = "Ayudantes en segundo plano que las apps instalan para tu usuario. Al apagarlos se descargan ahora y dejan de lanzarse al iniciar sesión — puedes revertirlo cuando quieras.";
+"No user launch agents. Clean! 🎉" = "Sin launch agents de usuario. ¡Limpio! 🎉";
+"Off at login" = "No inicia";
+"Running" = "Activo";
+"Loads at login" = "Inicia al login";
+"System-wide agents (read-only)" = "Agentes del sistema (solo lectura)";
+"Installed for all users in /Library/LaunchAgents. Remove them from their app's own uninstaller or settings." = "Instalados para todos los usuarios en /Library/LaunchAgents. Elimínalos desde el desinstalador o los ajustes de su propia app.";
+
+/* Duplicates */
+"Duplicates" = "Duplicados";
+"Find identical files (≥5 MB) in Desktop, Documents, Downloads, Movies, Music and Pictures. Compared by content, not name." = "Encuentra archivos idénticos (≥5 MB) en Escritorio, Documentos, Descargas, Películas, Música e Imágenes. Se comparan por contenido, no por nombre.";
+"Find Duplicates" = "Buscar duplicados";
+"Hashing candidate files…" = "Calculando huellas de archivos…";
+"No duplicates" = "Sin duplicados";
+"No identical files above 5 MB were found." = "No se encontraron archivos idénticos sobre 5 MB.";
+"%lld copies" = "%lld copias";
+"wastes %@" = "desperdicia %@";
+"newest" = "más reciente";
+"Moved %lld duplicates to Trash." = "%lld duplicados movidos a la Papelera.";
+"Kept 1 copy of %@ — can't delete every copy." = "Se conservó 1 copia de %@ — no se pueden borrar todas.";
+
+/* Auto-clean */
+"Weekly auto-clean" = "Limpieza automática semanal";
+"Sundays at 12:00 — safe categories only, result in Notification Center and the clean log." = "Domingos a las 12:00 — solo categorías seguras; el resultado queda en Notificaciones y en el registro de limpieza.";
+"Weekly clean done" = "Limpieza semanal completada";
+"Chinchilla freed %@ of safe junk." = "Chinchilla liberó %@ de basura segura.";
+
+/* Desktop widget */
+"Desktop widget" = "Widget de escritorio";
+"free" = "libre";
+"Purgeable %@" = "Purgable %@";
+
+/* Tab Saver */
+"Tab Saver" = "Tab Saver";
+"For tab hoarders: background tabs stop rendering and free their memory (the browser's own Memory Saver)." = "Para acumuladores de pestañas: las pestañas en segundo plano dejan de renderizar y liberan su memoria (el Memory Saver del propio navegador).";
+"No Chromium browser (Chrome, Edge, Brave) found." = "No se encontró un navegador Chromium (Chrome, Edge, Brave).";
+"Applies to %@ on next browser restart. The browser will show \"Managed by your organization\" while active — turning this off removes it completely." = "Aplica a %@ al reiniciar el navegador. El navegador mostrará \"Administrado por tu organización\" mientras esté activo — al apagarlo desaparece por completo.";
+"Close duplicate tabs" = "Cerrar pestañas duplicadas";
+"%@: closed %lld, kept %lld" = "%1$@: cerradas %2$lld, quedan %3$lld";
+"No browser with open tabs found." = "No se encontró un navegador con pestañas abiertas.";
+"Too many tabs?" = "¿Demasiadas pestañas?";
+"If you live with dozens of tabs open, Chinchilla can turn on your browser's Memory Saver: background tabs stop rendering and free their memory until you click them again." = "Si vives con decenas de pestañas abiertas, Chinchilla puede activar el Memory Saver de tu navegador: las pestañas en segundo plano dejan de renderizar y liberan su memoria hasta que vuelvas a abrirlas.";
+"No Chromium browser (Chrome, Edge, Brave) detected — you can skip this." = "No se detectó un navegador Chromium (Chrome, Edge, Brave) — puedes saltarte esto.";
+"Enable for %@" = "Activar para %@";
+"Applies on next browser restart. The browser will show \"Managed by your organization\" — turn it off anytime from the Dashboard and it disappears." = "Aplica al reiniciar el navegador. Mostrará \"Administrado por tu organización\" — apágalo cuando quieras desde el Panel y desaparece.";

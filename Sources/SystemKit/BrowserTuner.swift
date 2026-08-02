@@ -1,0 +1,136 @@
+import Foundation
+import CoreFoundation
+
+public struct TunableBrowser: Sendable, Identifiable {
+    public let id: String            // bundle ID
+    public let name: String
+    /// Preference domain Chrome-family policies are read from (user level,
+    /// per https://www.chromium.org/administrators/mac-quick-start/).
+    public let policyDomain: String?
+    public let supportsDuplicateClose: Bool
+    /// AppleScript application name for tab enumeration.
+    public let scriptName: String?
+}
+
+/// Makes tab-hoarder browsers lighter:
+/// 1. Memory Saver (Chromium's own tab discarding — background tabs stop
+///    rendering and free their memory) enabled via user-level policy.
+/// 2. Closing duplicate tabs via AppleScript.
+/// Everything is reversible; Chrome shows "Managed by your organization"
+/// while any policy key is set — we disclose that in the UI.
+public enum BrowserTuner {
+    public static let browsers: [TunableBrowser] = [
+        TunableBrowser(
+            id: "com.google.Chrome", name: "Chrome",
+            policyDomain: "com.google.Chrome",
+            supportsDuplicateClose: true, scriptName: "Google Chrome"
+        ),
+        TunableBrowser(
+            id: "com.microsoft.edgemac", name: "Edge",
+            policyDomain: "com.microsoft.Edge",
+            supportsDuplicateClose: false, scriptName: nil
+        ),
+        TunableBrowser(
+            id: "com.brave.Browser", name: "Brave",
+            policyDomain: "com.brave.Browser",
+            supportsDuplicateClose: false, scriptName: nil
+        ),
+        TunableBrowser(
+            id: "com.apple.Safari", name: "Safari",
+            policyDomain: nil,  // Safari has no discard policy; macOS manages it
+            supportsDuplicateClose: true, scriptName: "Safari"
+        ),
+    ]
+
+    public static func isInstalled(_ browser: TunableBrowser) -> Bool {
+        if browser.id == "com.apple.Safari" { return true }
+        let fm = FileManager.default
+        return fm.fileExists(atPath: "/Applications/\(appName(browser)).app")
+            || fm.fileExists(atPath: NSHomeDirectory() + "/Applications/\(appName(browser)).app")
+    }
+
+    private static func appName(_ browser: TunableBrowser) -> String {
+        switch browser.id {
+        case "com.google.Chrome": "Google Chrome"
+        case "com.microsoft.edgemac": "Microsoft Edge"
+        case "com.brave.Browser": "Brave Browser"
+        default: browser.name
+        }
+    }
+
+    // MARK: - Memory Saver policy
+
+    /// MemorySaverModeSavings: 0 = off, 1 = moderate, 2 = maximum.
+    /// We use 1 (moderate) — most of the win without aggressive tab reloads.
+    /// HighEfficiencyModeEnabled is the older boolean spelling, kept for
+    /// Chromium builds that still read it. Unknown keys are ignored.
+    public static func isMemorySaverManaged(_ browser: TunableBrowser) -> Bool {
+        guard let domain = browser.policyDomain else { return false }
+        return CFPreferencesCopyAppValue("MemorySaverModeSavings" as CFString, domain as CFString) != nil
+    }
+
+    public static func setMemorySaver(_ enabled: Bool, for browser: TunableBrowser) {
+        guard let domain = browser.policyDomain else { return }
+        let appID = domain as CFString
+        if enabled {
+            CFPreferencesSetAppValue("MemorySaverModeSavings" as CFString, 1 as CFNumber, appID)
+            CFPreferencesSetAppValue("HighEfficiencyModeEnabled" as CFString, kCFBooleanTrue, appID)
+            if domain == "com.microsoft.Edge" {
+                CFPreferencesSetAppValue("SleepingTabsEnabled" as CFString, kCFBooleanTrue, appID)
+            }
+        } else {
+            CFPreferencesSetAppValue("MemorySaverModeSavings" as CFString, nil, appID)
+            CFPreferencesSetAppValue("HighEfficiencyModeEnabled" as CFString, nil, appID)
+            if domain == "com.microsoft.Edge" {
+                CFPreferencesSetAppValue("SleepingTabsEnabled" as CFString, nil, appID)
+            }
+        }
+        CFPreferencesAppSynchronize(appID)
+    }
+
+    // MARK: - Duplicate tabs
+
+    public struct TabReport: Sendable {
+        public let browser: String
+        public let closed: Int
+        public let remaining: Int
+    }
+
+    /// Closes tabs whose URL already appears in an earlier window/tab.
+    /// Requires the Automation permission (macOS prompts on first use).
+    public static func closeDuplicateTabs(in browser: TunableBrowser) async throws -> TabReport {
+        guard let scriptName = browser.scriptName else {
+            throw ShellError(exitCode: -1, stderr: "unsupported browser")
+        }
+        let script = """
+        tell application "\(scriptName)"
+            set seen to {}
+            set closedCount to 0
+            set totalCount to 0
+            repeat with w in windows
+                set tabList to tabs of w
+                repeat with t in reverse of tabList
+                    set u to URL of t
+                    if u is in seen then
+                        close t
+                        set closedCount to closedCount + 1
+                    else
+                        set end of seen to u
+                        set totalCount to totalCount + 1
+                    end if
+                end repeat
+            end repeat
+            return (closedCount as string) & "," & (totalCount as string)
+        end tell
+        """
+        let output = try await ShellRunner.run(
+            "/usr/bin/osascript", ["-e", script], timeout: .seconds(60)
+        )
+        let parts = output.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ",")
+        return TabReport(
+            browser: browser.name,
+            closed: Int(parts.first ?? "0") ?? 0,
+            remaining: Int(parts.last ?? "0") ?? 0
+        )
+    }
+}

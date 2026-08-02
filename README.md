@@ -1,0 +1,107 @@
+# Chinchilla 🐭✨
+
+App nativa de limpieza y optimización para macOS, inspirada en [Mole](https://github.com/tw93/Mole) y CleanMyMac — pero honesta. Hecha en SwiftUI (Swift 6), compila **sin Xcode** (solo Command Line Tools) y no tiene ninguna dependencia externa.
+
+> Como las chinchillas: se limpia con baños de polvo. 🛁
+
+## Módulos
+
+| Módulo | Qué hace |
+|---|---|
+| **Smart Scan** | Un clic desde el Dashboard o la barra de menú: combina limpieza segura + Docker + artefactos y muestra el total recuperable. |
+| **Limpieza profunda** | Caches de apps y navegadores, logs, instaladores viejos, basura de desarrollo. Flujo escanear → revisar → limpiar, con *vista previa (dry-run) por defecto*. |
+| **Desinstalador** | Desinstala apps junto con sus restos (Application Support, Preferences, Containers, LaunchAgents, etc.), todo a la Papelera. |
+| **Espacio en disco** | Escaneo paralelo con `fts(3)`, drill-down por carpetas, treemap interactivo y buscador de archivos grandes (≥100 MB). |
+| **Modo gaming** | Mantiene el Mac despierto (IOPMAssertion), detiene backups de Time Machine, cierra apps en segundo plano (con relanzado en un clic) y muestra CPU/GPU/presión de memoria/temperatura en un overlay flotante. **Sin humo**: no hay "purge" de RAM ni contador de FPS falso. |
+| **Docker & Dev** | Estado del daemon, `docker system df`, prunes por categoría (seguro/profundo/build cache/volúmenes) y cazador de `node_modules`, `target`, `.venv` y `Pods` en proyectos viejos. |
+| **Inicio** | Gestiona los launch agents que se cargan al iniciar sesión: apágalos/enciéndelos con un switch (reversible), y acceso directo a los Ítems de inicio de macOS. |
+| **Duplicados** | Archivos idénticos (por contenido, SHA-256) en tus carpetas de usuario, agrupados por espacio desperdiciado; siempre conserva al menos una copia. |
+| **Auto-clean semanal** | LaunchAgent propio que corre la app headless los domingos: limpia solo categorías seguras y notifica lo liberado. |
+| **Widget de escritorio** | Anillo de espacio libre anclado al escritorio (todas las Spaces, detrás de tus ventanas), activable desde la barra de menú. |
+| **Tab Saver** | Para acumuladores de pestañas: activa el Memory Saver de Chrome/Edge/Brave por política de usuario (las pestañas en segundo plano dejan de renderizar) y cierra pestañas duplicadas en Chrome y Safari. Reversible; se avisa que el navegador mostrará "Administrado por tu organización". |
+
+También: ícono en la barra de menú con stats rápidas, onboarding en el primer arranque, y actualizaciones automáticas vía Sparkle.
+
+## Compilar y ejecutar
+
+Requisitos: macOS 15+, Swift 6.1+ (Command Line Tools bastan). Corre en cualquier Mac: Apple Silicon (M1+, MacBook Neo con A18 Pro) e Intel — el release se compila universal (`CHINCHILLA_UNIVERSAL=1`).
+
+```bash
+./scripts/build-app.sh          # release → dist/Chinchilla.app (firma con tu Developer ID si existe)
+cp -R dist/Chinchilla.app /Applications/   # "instalar" la nueva versión
+
+./scripts/dev-run.sh            # build debug + abrir
+swift test                      # tests (SafetyPolicy, walker, cleaner)
+```
+
+> ⚠️ Prueba las funciones de limpieza siempre desde el bundle (`dist/Chinchilla.app`), nunca con `swift run`: los permisos TCC (Full Disk Access) se asocian al bundle.
+
+## Full Disk Access (opcional pero recomendado)
+
+Sin FDA, Safari, la Papelera y otras rutas protegidas no se pueden medir ni limpiar (la app lo indica con un banner).
+
+1. Ajustes del Sistema → Privacidad y seguridad → **Acceso total al disco**
+2. `+` → selecciona `dist/Chinchilla.app`
+
+**Nota sobre la firma:** el script firma ad-hoc por defecto, y macOS puede olvidar el permiso FDA en cada rebuild (cambia el cdhash). Para que sobreviva:
+
+1. Acceso a Llaveros → Asistente de Certificados → Crear certificado…
+2. Nombre: `Chinchilla Dev`, tipo: **Firma de código**
+3. Recompila: el script detecta el certificado y lo usa automáticamente.
+
+## Seguridad del borrado
+
+- **Dry-run por defecto**: el botón dice "Previsualizar limpieza" hasta que apagues el switch.
+- `SafetyPolicy` valida **cada path en el momento de borrar** (no solo al escanear): denylist absoluta (`/System`, iCloud Drive, Keychains, Mail, Fotos, `/private/var/…`), resolución de symlinks, raíces declaradas por regla, flags SIP/immutable.
+- Por defecto se borra a la Papelera; solo los caches `safe` se eliminan directo.
+- Todo queda registrado en `~/Library/Logs/Chinchilla/clean-history.jsonl`.
+
+## Publicar una versión (DMG firmado y notarizado)
+
+Requisitos una sola vez:
+
+1. **Certificado**: "Developer ID Application" instalado en el Llavero (ya lo tienes ✓).
+2. **Credenciales de notarización**:
+   ```bash
+   xcrun notarytool store-credentials chinchilla-notary \
+     --apple-id TU_APPLE_ID --team-id 8457F927YF \
+     --password CONTRASEÑA_ESPECÍFICA_DE_APP
+   ```
+   La contraseña específica de app se crea en https://account.apple.com → Inicio de sesión y seguridad.
+
+Luego, cada release:
+
+```bash
+# 1. sube la versión en packaging/Info.plist (CFBundleShortVersionString y CFBundleVersion)
+./scripts/release.sh
+# → dist/Chinchilla-X.Y.Z.dmg  firmado, notarizado y con staple
+```
+
+El script verifica la firma como lo haría Gatekeeper (`spctl`) antes de terminar.
+
+### Actualizaciones automáticas (Sparkle) — pendiente de configurar
+
+El framework ya está integrado, pero **antes del primer DMG público** hay que:
+
+1. Decidir la URL del feed (`appcast.xml`) — p. ej. GitHub Releases o tu web.
+2. Generar las claves EdDSA con `generate_keys` (viene en el tarball de [Sparkle](https://github.com/sparkle-project/Sparkle/releases)); guarda la privada.
+3. Reemplazar `SUFeedURL` y `SUPublicEDKey` en `packaging/Info.plist`.
+4. Por cada release, generar el appcast con `generate_appcast`.
+
+Si se publica un DMG con los placeholders, esos usuarios no podrán auto-actualizar (tendrán que descargar a mano la siguiente versión).
+
+## Arquitectura
+
+```
+Sources/
+├── Chinchilla/    # SwiftUI: vistas + viewmodels (@Observable, @MainActor)
+├── CleanCore/     # motor de limpieza: reglas, scanner, cleaner, SafetyPolicy
+├── DiskScanKit/   # fts walker paralelo, treemap, tamaños asignados, artefactos
+└── SystemKit/     # shell runner, docker, métricas (mach/sysctl/IOKit), permisos
+```
+
+Localizada en inglés y español (según el idioma del sistema).
+
+## Licencia
+
+[AGPL-3.0](LICENSE) — software libre: úsalo, modifícalo y compártelo bajo la misma licencia. Sparkle (MIT) se usa como dependencia. Inspirada en [Mole](https://github.com/tw93/Mole) (GPL-3.0) sin reutilizar su código.
