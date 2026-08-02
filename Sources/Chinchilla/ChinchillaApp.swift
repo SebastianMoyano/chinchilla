@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import Sparkle
 import UserNotifications
 import CleanCore
 import SystemKit
@@ -54,14 +53,6 @@ struct ChinchillaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @State private var appState = AppState()
 
-    // Sparkle only makes sense from the bundled app; `swift run` has no
-    // Info.plist, so the updater stays dormant there.
-    private let updaterController = SPUStandardUpdaterController(
-        startingUpdater: Bundle.main.bundleIdentifier != nil,
-        updaterDelegate: nil,
-        userDriverDelegate: nil
-    )
-
     var body: some Scene {
         Window("Chinchilla", id: "main") {
             MainWindow()
@@ -76,7 +67,7 @@ struct ChinchillaApp: App {
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
-                    updaterController.checkForUpdates(nil)
+                    appState.updates.checkNow()
                 }
             }
         }

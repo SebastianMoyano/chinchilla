@@ -35,11 +35,5 @@
 	<string>© 2026 Sebastián</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Chinchilla runs maintenance commands that may require administrator privileges.</string>
-	<key>SUFeedURL</key>
-	<string>https://REPLACE-ME.example.com/chinchilla/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>REPLACE-WITH-generate_keys-OUTPUT</string>
-	<key>SUEnableAutomaticChecks</key>
-	<true/>
 </dict>
 </plist>

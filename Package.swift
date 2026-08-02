@@ -5,20 +5,10 @@ let package = Package(
     name: "cleanmacseba",
     defaultLocalization: "en",
     platforms: [.macOS(.v15)],
-    dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
-    ],
     targets: [
         .executableTarget(
             name: "Chinchilla",
-            dependencies: [
-                "CleanCore", "DiskScanKit", "SystemKit",
-                .product(name: "Sparkle", package: "Sparkle"),
-            ],
-            linkerSettings: [
-                // The bundled app carries Sparkle.framework in Contents/Frameworks.
-                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
-            ]
+            dependencies: ["CleanCore", "DiskScanKit", "SystemKit"]
         ),
         .target(name: "CleanCore", dependencies: ["SystemKit", "DiskScanKit"]),
         .target(name: "DiskScanKit"),

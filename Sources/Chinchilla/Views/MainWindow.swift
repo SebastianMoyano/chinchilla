@@ -15,8 +15,34 @@ struct MainWindow: View {
         .sheet(isPresented: $showOnboarding) {
             OnboardingView(isPresented: $showOnboarding)
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                if let version = appState.updates.availableVersion {
+                    // Passive: a quiet capsule, no dialogs ever.
+                    Link(destination: appState.updates.releaseURL) {
+                        Label("\(version) available", systemImage: "arrow.down.circle.fill")
+                            .font(.callout.weight(.medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(.green.opacity(0.15), in: Capsule())
+                            .foregroundStyle(.green)
+                    }
+                    .help("A new version is ready on GitHub — click to download. No rush.")
+                } else if let result = appState.updates.manualResult {
+                    Text(verbatim: result)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Link(destination: UpdateModel.sponsorURL) {
+                    Label("Sponsor", systemImage: "heart.fill")
+                        .foregroundStyle(.pink)
+                }
+                .help("Enjoying Chinchilla? Support its development ♥")
+            }
+        }
         .onAppear {
             appState.desktopWidget.restoreIfEnabled()
+            appState.updates.checkIfStale()
         }
     }
 

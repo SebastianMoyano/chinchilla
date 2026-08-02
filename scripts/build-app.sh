@@ -26,17 +26,10 @@ else
 fi
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 cp "$ROOT/packaging/Info.plist" "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
-
-# Embed Sparkle (binary links @rpath/Sparkle.framework with
-# rpath @executable_path/../Frameworks).
-SPARKLE=$(find "$ROOT/.build/artifacts" -type d -name "Sparkle.framework" -path "*macos*" | head -1)
-if [ -n "$SPARKLE" ]; then
-  cp -R "$SPARKLE" "$APP/Contents/Frameworks/"
-fi
 
 # Localizations
 cp -R "$ROOT/packaging/lproj/"*.lproj "$APP/Contents/Resources/"
@@ -64,9 +57,6 @@ if [ -z "$IDENTITY" ] && security find-identity -v -p codesigning 2>/dev/null | 
   IDENTITY="Chinchilla Dev"
 fi
 IDENTITY="${IDENTITY:--}"
-if [ -d "$APP/Contents/Frameworks/Sparkle.framework" ]; then
-  codesign --force --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
-fi
 codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
 
 echo "Built: $APP (signed: $IDENTITY)"

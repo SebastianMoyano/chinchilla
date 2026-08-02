@@ -153,8 +153,14 @@
 "You're all set" = "Todo listo";
 "Nothing is ever deleted without your review, cleans go to the Trash when possible, and every deletion is logged. Start with a Smart Scan from the Dashboard." = "Nada se borra sin tu revisión, las limpiezas van a la Papelera cuando es posible, y cada borrado queda registrado. Empieza con un Smart Scan desde el Panel.";
 
-/* Updates */
+/* Updates & sponsor */
 "Check for Updates…" = "Buscar actualizaciones…";
+"%@ available" = "%@ disponible";
+"A new version is ready on GitHub — click to download. No rush." = "Hay una versión nueva en GitHub — haz clic para descargarla. Sin apuro.";
+"You're up to date (%@)." = "Estás al día (%@).";
+"Couldn't check for updates." = "No se pudo comprobar si hay actualizaciones.";
+"Sponsor" = "Apoyar";
+"Enjoying Chinchilla? Support its development ♥" = "¿Te sirve Chinchilla? Apoya su desarrollo ♥";
 
 /* Startup */
 "Startup" = "Inicio";

@@ -20,7 +20,7 @@ App nativa de limpieza y optimización para macOS, inspirada en [Mole](https://g
 | **Widget de escritorio** | Anillo de espacio libre anclado al escritorio (todas las Spaces, detrás de tus ventanas), activable desde la barra de menú. |
 | **Tab Saver** | Para acumuladores de pestañas: activa el Memory Saver de Chrome/Edge/Brave por política de usuario (las pestañas en segundo plano dejan de renderizar) y cierra pestañas duplicadas en Chrome y Safari. Reversible; se avisa que el navegador mostrará "Administrado por tu organización". |
 
-También: ícono en la barra de menú con stats rápidas, onboarding en el primer arranque, y actualizaciones automáticas vía Sparkle.
+También: ícono en la barra de menú con stats rápidas, onboarding en el primer arranque, y aviso de actualizaciones **pasivo** (una cápsula discreta en la toolbar cuando hay versión nueva en GitHub Releases — jamás un popup).
 
 ## Compilar y ejecutar
 
@@ -79,16 +79,9 @@ Luego, cada release:
 
 El script verifica la firma como lo haría Gatekeeper (`spctl`) antes de terminar.
 
-### Actualizaciones automáticas (Sparkle) — pendiente de configurar
+### Actualizaciones
 
-El framework ya está integrado, pero **antes del primer DMG público** hay que:
-
-1. Decidir la URL del feed (`appcast.xml`) — p. ej. GitHub Releases o tu web.
-2. Generar las claves EdDSA con `generate_keys` (viene en el tarball de [Sparkle](https://github.com/sparkle-project/Sparkle/releases)); guarda la privada.
-3. Reemplazar `SUFeedURL` y `SUPublicEDKey` en `packaging/Info.plist`.
-4. Por cada release, generar el appcast con `generate_appcast`.
-
-Si se publica un DMG con los placeholders, esos usuarios no podrán auto-actualizar (tendrán que descargar a mano la siguiente versión).
+Sin frameworks ni diálogos: la app consulta la API de GitHub Releases (máx. una vez al día, en silencio) y si hay versión nueva muestra una cápsula discreta en la toolbar que enlaza a la descarga. Publicar el release en GitHub (`gh release create vX.Y.Z dist/Chinchilla-X.Y.Z.dmg`) es todo lo que se necesita para que los usuarios lo vean.
 
 ## Arquitectura
 
@@ -104,4 +97,6 @@ Localizada en inglés y español (según el idioma del sistema).
 
 ## Licencia
 
-[AGPL-3.0](LICENSE) — software libre: úsalo, modifícalo y compártelo bajo la misma licencia. Sparkle (MIT) se usa como dependencia. Inspirada en [Mole](https://github.com/tw93/Mole) (GPL-3.0) sin reutilizar su código.
+[AGPL-3.0](LICENSE) — software libre: úsalo, modifícalo y compártelo bajo la misma licencia. Sin dependencias externas. Inspirada en [Mole](https://github.com/tw93/Mole) (GPL-3.0) sin reutilizar su código.
+
+¿Te sirve Chinchilla? [Apóyala en GitHub Sponsors ♥](https://github.com/sponsors/SebastianMoyano)

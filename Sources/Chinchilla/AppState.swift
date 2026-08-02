@@ -64,6 +64,7 @@ final class AppState {
     let schedule = ScheduleModel()
     let desktopWidget = DesktopWidgetModel()
     let tabSaver = TabSaverModel()
+    let updates = UpdateModel()
 
     // MARK: Smart Scan — one click, three sweeps, one number.
 

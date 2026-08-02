@@ -35,26 +35,10 @@ if ! xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1; the
   exit 1
 fi
 
-if grep -q "REPLACE-ME" "$ROOT/packaging/Info.plist"; then
-  echo "WARNING: SUFeedURL/SUPublicEDKey in packaging/Info.plist are placeholders."
-  echo "         Sparkle auto-updates won't work until you set them (README → Releases)."
-fi
-
 # ── Build (universal: Apple Silicon + Intel) ─────────────────────────
 CHINCHILLA_IDENTITY="-" CHINCHILLA_UNIVERSAL=1 "$ROOT/scripts/build-app.sh" release
 
-# ── Sign for distribution (inside-out, hardened runtime) ─────────────
-SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
-if [ -d "$SPARKLE" ]; then
-  codesign -f -o runtime --timestamp -s "$IDENTITY" \
-    "$SPARKLE/Versions/B/XPCServices/Installer.xpc"
-  codesign -f -o runtime --timestamp -s "$IDENTITY" \
-    --preserve-metadata=entitlements \
-    "$SPARKLE/Versions/B/XPCServices/Downloader.xpc"
-  codesign -f -o runtime --timestamp -s "$IDENTITY" "$SPARKLE/Versions/B/Autoupdate"
-  codesign -f -o runtime --timestamp -s "$IDENTITY" "$SPARKLE/Versions/B/Updater.app"
-  codesign -f -o runtime --timestamp -s "$IDENTITY" "$SPARKLE"
-fi
+# ── Sign for distribution (hardened runtime) ─────────────────────────
 codesign -f -o runtime --timestamp -s "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
 codesign --verify --deep --strict "$APP"
 echo "Signature OK"
