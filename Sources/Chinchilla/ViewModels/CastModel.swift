@@ -70,6 +70,122 @@ final class CastModel {
     private var dlnaRenderers: [DLNARenderer] = []
     private var awaitingFetch = false
 
+    // MARK: Screen mirroring
+    var mirroring = false
+    var mirrorStarting = false
+    var mirrorQuality: MirrorQuality = .p1080
+    var mirrorAudio = true
+    var mirrorError: String?
+    var screenPermissionGranted = ScreenRecordingPermission.isGranted
+    private let streamer = ScreenStreamer()
+
+    /// Only Chromecast and FCast play HLS; DLNA renderers generally don't.
+    var canMirrorToConnectedDevice: Bool {
+        switch connected?.kind {
+        case .googlecast, .fcast: true
+        case .dlna, nil: false
+        }
+    }
+
+    func refreshScreenPermission() {
+        screenPermissionGranted = ScreenRecordingPermission.isGranted
+    }
+
+    func requestScreenPermission() {
+        _ = ScreenRecordingPermission.request()
+        refreshScreenPermission()
+    }
+
+    func startMirroring() {
+        guard let target = connected, !mirroring, !mirrorStarting else { return }
+        guard ScreenRecordingPermission.isGranted else {
+            requestScreenPermission()
+            mirrorError = String(localized: "Grant Screen Recording, then reopen Chinchilla — macOS only applies it after a relaunch.")
+            return
+        }
+        mirrorStarting = true
+        mirrorError = nil
+        Task {
+            defer { mirrorStarting = false }
+            do {
+                try server.start()
+                for _ in 0..<40 where server.port == 0 {
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                guard server.port > 0, let ip = CastHTTPServer.lanAddress(reachableFrom: targetHost) else {
+                    mirrorError = String(localized: "Couldn't start the local server.")
+                    return
+                }
+                // Serve the live playlist and its rolling segments from memory.
+                let store = streamer.store
+                server.setPrefixRoute("/mirror/") { path in
+                    if path == "stream.m3u8" {
+                        return ("application/x-mpegurl", Data(store.playlist().utf8))
+                    }
+                    if path == "init.mp4", let data = store.initSegmentData() {
+                        return ("video/mp4", data)
+                    }
+                    if path.hasPrefix("seg-"), path.hasSuffix(".m4s"),
+                       let index = Int(path.dropFirst(4).dropLast(4)),
+                       let data = store.segmentData(index: index) {
+                        return ("video/iso.segment", data)
+                    }
+                    return nil
+                }
+                streamer.onStopped = { message in
+                    Task { @MainActor [weak self] in
+                        self?.mirroring = false
+                        if let message { self?.mirrorError = message }
+                    }
+                }
+                try await streamer.start(quality: mirrorQuality, includeAudio: mirrorAudio)
+                // Don't hand the TV a playlist before the first segment exists.
+                guard await streamer.waitForFirstSegment() else {
+                    await streamer.stop()
+                    mirrorError = String(localized: "The screen encoder didn't produce video. Try again.")
+                    return
+                }
+                let url = "http://\(ip):\(server.port)/mirror/stream.m3u8"
+                castingName = String(localized: "Your screen")
+                mirroring = true
+                playbackState = 1
+                switch target.kind {
+                case .googlecast:
+                    await castSession?.load(
+                        url: url, mime: "application/x-mpegurl",
+                        title: String(localized: "Mac screen"), live: true
+                    )
+                case .fcast:
+                    await session?.play(FCastPlayMessage(
+                        container: "application/vnd.apple.mpegurl", url: url
+                    ))
+                case .dlna:
+                    break
+                }
+            } catch {
+                mirrorError = error.localizedDescription
+                await streamer.stop()
+            }
+        }
+    }
+
+    func stopMirroring() {
+        guard mirroring || mirrorStarting else { return }
+        mirroring = false
+        castingName = nil
+        playbackState = 0
+        let target = connected
+        Task {
+            await streamer.stop()
+            server.setPrefixRoute("/mirror/", handler: nil)
+            switch target?.kind {
+            case .googlecast: await castSession?.stop()
+            case .fcast: await session?.stop()
+            default: break
+            }
+        }
+    }
+
     // MARK: Discovery (both protocols at once)
 
     func startDiscovery() {

@@ -15,6 +15,7 @@ struct CastView: View {
                 }
                 devicesCard(model)
                 if model.connected != nil {
+                    MirrorCard()
                     NowPlayingCard()
                 }
                 ReceiverGuideCard()
@@ -280,5 +281,91 @@ struct ReceiverGuideCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+
+/// Screen mirroring: capture → hardware H.264 → live HLS → the TV.
+struct MirrorCard: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        let model = appState.cast
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "macbook.and.iphone")
+                    .font(.title2)
+                    .foregroundStyle(model.mirroring ? .green : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Mirror this screen")
+                        .font(.headline)
+                    Text("Your whole desktop, live on the TV. There's a few seconds of delay — great for videos, photos and presenting; not for using the TV as an interactive monitor.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if model.mirrorStarting {
+                    ProgressView().controlSize(.small)
+                }
+                Toggle("", isOn: Binding(
+                    get: { model.mirroring },
+                    set: { on in on ? model.startMirroring() : model.stopMirroring() }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .tint(.green)
+                .disabled(!model.canMirrorToConnectedDevice || model.mirrorStarting)
+            }
+
+            if !model.canMirrorToConnectedDevice {
+                Label("This TV is connected over DLNA, which only plays files. Mirroring needs a Chromecast or FCast connection.", systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if !model.screenPermissionGranted {
+                HStack(spacing: 8) {
+                    Label("Screen Recording permission is needed", systemImage: "lock.shield")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button("Grant…") { model.requestScreenPermission() }
+                        .controlSize(.small)
+                    Button("Open Settings") {
+                        if let url = URL(string: ScreenRecordingPermission.settingsURL) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .controlSize(.small)
+                }
+            } else if !model.mirroring {
+                HStack(spacing: 12) {
+                    Picker("Quality", selection: Binding(
+                        get: { model.mirrorQuality },
+                        set: { model.mirrorQuality = $0 }
+                    )) {
+                        Text("720p").tag(MirrorQuality.p720)
+                        Text("1080p").tag(MirrorQuality.p1080)
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    Toggle("Include system audio", isOn: Binding(
+                        get: { model.mirrorAudio },
+                        set: { model.mirrorAudio = $0 }
+                    ))
+                    .toggleStyle(.checkbox)
+                    Spacer()
+                }
+            }
+
+            if let error = model.mirrorError {
+                Text(verbatim: error)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+        .padding(18)
+        .background(
+            model.mirroring ? AnyShapeStyle(.green.opacity(0.08)) : AnyShapeStyle(.regularMaterial),
+            in: RoundedRectangle(cornerRadius: 14)
+        )
+        .onAppear { model.refreshScreenPermission() }
     }
 }

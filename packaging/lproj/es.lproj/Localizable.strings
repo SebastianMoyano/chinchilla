@@ -442,3 +442,16 @@
 "Android TV / Google TV — nothing to install either" = "Android TV / Google TV — tampoco hay que instalar nada";
 "Most of them have Chromecast built in, so they show up here on their own. Installing \"FCast Receiver\" from the Play Store is optional — it unlocks the FCast path (and, later, screen mirroring)." = "La mayoría trae Chromecast integrado, así que aparecen aquí solos. Instalar \"FCast Receiver\" desde la Play Store es opcional — habilita la vía FCast (y, más adelante, el espejo de pantalla).";
 "Looking for TVs — Chromecast built-in, DLNA smart TVs and FCast receivers. Most TVs need nothing installed." = "Buscando TVs — Chromecast integrado, smart TVs con DLNA y receptores FCast. La mayoría no necesita instalar nada.";
+
+/* Espejo de pantalla (0.10.0) */
+"Mirror this screen" = "Duplicar esta pantalla";
+"Your whole desktop, live on the TV. There's a few seconds of delay — great for videos, photos and presenting; not for using the TV as an interactive monitor." = "Todo tu escritorio, en vivo en el TV. Hay unos segundos de retraso — ideal para videos, fotos y presentar; no para usar el TV como monitor interactivo.";
+"This TV is connected over DLNA, which only plays files. Mirroring needs a Chromecast or FCast connection." = "Este TV está conectado por DLNA, que solo reproduce archivos. El espejo necesita una conexión Chromecast o FCast.";
+"Screen Recording permission is needed" = "Se necesita permiso de Grabación de pantalla";
+"Grant…" = "Conceder…";
+"Quality" = "Calidad";
+"Include system audio" = "Incluir audio del sistema";
+"Your screen" = "Tu pantalla";
+"Mac screen" = "Pantalla del Mac";
+"Grant Screen Recording, then reopen Chinchilla — macOS only applies it after a relaunch." = "Concede Grabación de pantalla y vuelve a abrir Chinchilla — macOS solo lo aplica tras reiniciar la app.";
+"The screen encoder didn't produce video. Try again." = "El codificador de pantalla no produjo video. Inténtalo de nuevo.";

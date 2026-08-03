@@ -154,6 +154,13 @@ public final class CastHTTPServer: @unchecked Sendable {
             }
             serveFile(connection, url: fileURL, range: rangeHeader,
                       headOnly: method == "HEAD", completion: completion)
+        } else if let prefix = prefixRoutes.keys.first(where: { path.hasPrefix($0) }),
+                  let handler = prefixRoutes[prefix],
+                  let (contentType, data) = handler(String(path.dropFirst(prefix.count))) {
+            sendData(connection, status: "200 OK", contentType: contentType, body: data,
+                     headOnly: method == "HEAD",
+                     extraHeaders: ["Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"])
+            completion()
         } else if let route = dynamicRoutes[path] {
             let (contentType, data) = route()
             sendData(connection, status: "200 OK", contentType: contentType, body: data,
@@ -166,8 +173,21 @@ public final class CastHTTPServer: @unchecked Sendable {
         }
     }
 
-    /// Dynamic in-memory routes (Phase B: HLS playlist + segments).
+    /// Dynamic in-memory routes (exact path).
     private var dynamicRoutes: [String: () -> (String, Data)] = [:]
+    /// Prefix routes: the handler receives the remainder of the path —
+    /// used for the live HLS playlist and its rolling segments.
+    private var prefixRoutes: [String: @Sendable (String) -> (String, Data)?] = [:]
+
+    public func setPrefixRoute(_ prefix: String, handler: (@Sendable (String) -> (String, Data)?)?) {
+        queue.sync {
+            if let handler {
+                prefixRoutes[prefix] = handler
+            } else {
+                prefixRoutes.removeValue(forKey: prefix)
+            }
+        }
+    }
 
     public func setRoute(_ path: String, provider: (() -> (String, Data))?) {
         queue.async { [weak self] in

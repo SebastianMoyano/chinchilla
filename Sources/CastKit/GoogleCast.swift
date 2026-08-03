@@ -128,7 +128,7 @@ public actor GoogleCastSession {
     private var transportID: String?
     private var sessionID: String?
     private var mediaSessionID: Int?
-    private var pendingLoad: (url: String, mime: String, title: String)?
+    private var pendingLoad: (url: String, mime: String, title: String, live: Bool)?
     private var heartbeat: Task<Void, Never>?
     private var continuation: AsyncStream<GoogleCastEvent>.Continuation?
 
@@ -284,8 +284,8 @@ public actor GoogleCastSession {
 
     // MARK: Commands
 
-    public func load(url: String, mime: String, title: String) {
-        let request = (url: url, mime: mime, title: title)
+    public func load(url: String, mime: String, title: String, live: Bool = false) {
+        let request = (url: url, mime: mime, title: title, live: live)
         guard transportID != nil else {
             // Receiver app still launching — load as soon as it's up.
             pendingLoad = request
@@ -294,14 +294,14 @@ public actor GoogleCastSession {
         performLoad(request)
     }
 
-    private func performLoad(_ request: (url: String, mime: String, title: String)) {
+    private func performLoad(_ request: (url: String, mime: String, title: String, live: Bool)) {
         guard let transport = transportID, let session = sessionID else { return }
         let metadata = """
         {"metadataType":0,"title":\(jsonString(request.title))}
         """
         let payload = """
         {"type":"LOAD","requestId":\(nextRequestID()),"sessionId":"\(session)",\
-        "media":{"contentId":\(jsonString(request.url)),"streamType":"BUFFERED",\
+        "media":{"contentId":\(jsonString(request.url)),"streamType":"\(request.live ? "LIVE" : "BUFFERED")",\
         "contentType":"\(request.mime)","metadata":\(metadata)},"autoplay":true,"currentTime":0}
         """
         send(namespace: Self.namespaceMedia, to: transport, payload: payload)
