@@ -18,22 +18,34 @@ public struct LaunchAgent: Sendable, Identifiable, Hashable {
     public let isLoaded: Bool
 
     public var fileName: String { (plistPath as NSString).lastPathComponent }
+
+    public func withLoaded(_ loaded: Bool) -> LaunchAgent {
+        LaunchAgent(
+            plistPath: plistPath, label: label, program: program,
+            domain: domain, isDisabled: isDisabled, isLoaded: loaded
+        )
+    }
 }
 
 /// Lists and toggles login launch agents. Disabling = bootout from launchd +
 /// renaming the plist to .plist.disabled (reversible, survives reboots).
+///
+/// Two-phase by design: `listAgents()` is pure file I/O and can never hang,
+/// so the UI renders instantly; `loadedStatus(for:)` probes launchd in
+/// parallel afterwards. The UI must never block on an external process.
 public enum LaunchAgentManager {
-    public static func list() async -> [LaunchAgent] {
+    /// Synchronous plist parse — instant, no subprocesses. `isLoaded` is
+    /// false pending a `loadedStatus` probe.
+    public static func listAgents() -> [LaunchAgent] {
         var agents: [LaunchAgent] = []
-        let userDir = NSHomeDirectory() + "/Library/LaunchAgents"
-        agents += await scan(dir: userDir, domain: .user)
-        agents += await scan(dir: "/Library/LaunchAgents", domain: .global)
+        agents += scan(dir: NSHomeDirectory() + "/Library/LaunchAgents", domain: .user)
+        agents += scan(dir: "/Library/LaunchAgents", domain: .global)
         return agents.sorted {
             ($0.domain.rawValue, $0.label.lowercased()) < ($1.domain.rawValue, $1.label.lowercased())
         }
     }
 
-    private static func scan(dir: String, domain: LaunchAgent.Domain) async -> [LaunchAgent] {
+    private static func scan(dir: String, domain: LaunchAgent.Domain) -> [LaunchAgent] {
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return [] }
         var agents: [LaunchAgent] = []
         for entry in entries {
@@ -47,23 +59,39 @@ public enum LaunchAgentManager {
                 ?? (entry as NSString).deletingPathExtension
             let program = dict["Program"] as? String
                 ?? (dict["ProgramArguments"] as? [String])?.first
-            let loaded = isDisabled ? false : await isLoaded(label: label)
             agents.append(LaunchAgent(
                 plistPath: path,
                 label: label,
                 program: program,
                 domain: domain,
                 isDisabled: isDisabled,
-                isLoaded: loaded
+                isLoaded: false
             ))
         }
         return agents
     }
 
+    /// Probes launchd for each label in parallel, each with a short timeout.
+    /// A slow or wedged launchctl costs at most one badge, never the list.
+    public static func loadedStatus(for labels: [String]) async -> Set<String> {
+        var loaded = Set<String>()
+        await withTaskGroup(of: (String, Bool).self) { group in
+            for label in labels {
+                group.addTask {
+                    (label, await isLoaded(label: label))
+                }
+            }
+            for await (label, isUp) in group where isUp {
+                loaded.insert(label)
+            }
+        }
+        return loaded
+    }
+
     public static func isLoaded(label: String) async -> Bool {
         let target = "gui/\(getuid())/\(label)"
         do {
-            _ = try await ShellRunner.run("/bin/launchctl", ["print", target], timeout: .seconds(5))
+            _ = try await ShellRunner.run("/bin/launchctl", ["print", target], timeout: .seconds(3))
             return true
         } catch {
             return false

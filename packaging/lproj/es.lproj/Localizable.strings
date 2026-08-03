@@ -191,6 +191,19 @@
 "Thinning was cancelled or failed." = "La reducción se canceló o falló.";
 "Finder may take a while to reflect this: %lld local Time Machine snapshots and purgeable space can hold on to deleted data. See the Dashboard for details." = "Finder puede tardar en reflejarlo: %lld snapshots locales de Time Machine y el espacio purgable pueden retener datos borrados. Mira el Panel para más detalle.";
 
+/* Tab Saver v2 (0.3.1) */
+"Too many tabs open?" = "¿Demasiadas pestañas abiertas?";
+"Put background tabs to sleep" = "Dormir las pestañas en segundo plano";
+"Needs Chrome, Edge or Brave — none found." = "Requiere Chrome, Edge o Brave — no se encontró ninguno.";
+"Tabs you're not looking at free their memory; they reload when you click them. Nothing closes, nothing is lost." = "Las pestañas que no estás mirando liberan su memoria; se recargan al hacerles clic. No se cierra nada, no se pierde nada.";
+"· takes effect after restarting the browser" = "· aplica al reiniciar el navegador";
+"Heads-up: the browser will say \"Managed by your organization\" while this is on. That's this switch — turn it off and the message disappears." = "Ojo: el navegador dirá \"Administrado por tu organización\" mientras esté activo. Ese mensaje es este switch — apágalo y desaparece.";
+"Close repeated tabs" = "Cerrar pestañas repetidas";
+"Close now" = "Cerrar ahora";
+"If the same page is open more than once (Chrome and Safari), keeps the first one and closes the copies." = "Si la misma página está abierta más de una vez (Chrome y Safari), conserva la primera y cierra las copias.";
+"Chinchilla can tell your browser to put tabs you're not looking at to sleep: they free their memory and reload when you click them. Nothing closes, nothing is lost — your Mac just breathes easier." = "Chinchilla puede pedirle a tu navegador que duerma las pestañas que no estás mirando: liberan su memoria y se recargan al hacerles clic. No se cierra nada, no se pierde nada — tu Mac simplemente respira mejor.";
+"Takes effect after restarting the browser. It will say \"Managed by your organization\" while this is on — that message is this switch, and it disappears if you turn it off (anytime, from the Dashboard)." = "Aplica al reiniciar el navegador. Dirá \"Administrado por tu organización\" mientras esté activo — ese mensaje es este switch, y desaparece si lo apagas (cuando quieras, desde el Panel).";
+
 /* Startup */
 "Startup" = "Inicio";
 "Apps that open at login are managed by macOS." = "Las apps que se abren al iniciar sesión las gestiona macOS.";

@@ -15,10 +15,15 @@ final class StartupModel {
 
     func refresh() {
         guard !loading else { return }
-        loading = true
         errorMessage = nil
+        // Phase 1: pure file reads — the list renders instantly, always.
+        agents = LaunchAgentManager.listAgents()
+        // Phase 2: probe launchd in parallel; badges fill in when ready.
+        loading = true
         Task {
-            agents = await LaunchAgentManager.list()
+            let labels = agents.filter { !$0.isDisabled }.map(\.label)
+            let loaded = await LaunchAgentManager.loadedStatus(for: labels)
+            agents = agents.map { $0.withLoaded(loaded.contains($0.label)) }
             loading = false
         }
     }
@@ -108,7 +113,8 @@ final class StartupModel {
             } catch {
                 errorMessage = String(describing: error)
             }
-            agents = await LaunchAgentManager.list()
+            loading = false
+            refresh()
         }
     }
 }

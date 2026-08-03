@@ -56,11 +56,19 @@ public enum ShellRunner {
     ) async throws -> String {
         nonisolated(unsafe) let child = process
         return try await withCheckedThrowingContinuation { continuation in
-            // Read fully off the calling thread; readDataToEndOfFile blocks
-            // until EOF, so do it on utility QoS threads.
-            DispatchQueue.global(qos: .utility).async {
-                let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-                let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            // Drain stdout and stderr CONCURRENTLY: reading them one after the
+            // other deadlocks if the child fills the 64 KB stderr buffer while
+            // we're still blocked on stdout (or vice versa).
+            nonisolated(unsafe) var outData = Data()
+            nonisolated(unsafe) var errData = Data()
+            let drains = DispatchGroup()
+            DispatchQueue.global(qos: .utility).async(group: drains) {
+                outData = outPipe.fileHandleForReading.readDataToEndOfFile()
+            }
+            DispatchQueue.global(qos: .utility).async(group: drains) {
+                errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            }
+            drains.notify(queue: .global(qos: .utility)) {
                 child.waitUntilExit()
                 let out = String(data: outData, encoding: .utf8) ?? ""
                 let err = String(data: errData, encoding: .utf8) ?? ""

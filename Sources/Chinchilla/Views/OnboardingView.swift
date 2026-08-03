@@ -121,7 +121,7 @@ struct OnboardingView: View {
                 .foregroundStyle(.indigo)
             Text("Too many tabs?")
                 .font(.title2.bold())
-            Text("If you live with dozens of tabs open, Chinchilla can turn on your browser's Memory Saver: background tabs stop rendering and free their memory until you click them again.")
+            Text("Chinchilla can tell your browser to put tabs you're not looking at to sleep: they free their memory and reload when you click them. Nothing closes, nothing is lost — your Mac just breathes easier.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: 400)
@@ -138,7 +138,7 @@ struct OnboardingView: View {
                 }
                 .toggleStyle(.switch)
                 .tint(.indigo)
-                Text("Applies on next browser restart. The browser will show \"Managed by your organization\" — turn it off anytime from the Dashboard and it disappears.")
+                Text("Takes effect after restarting the browser. It will say \"Managed by your organization\" while this is on — that message is this switch, and it disappears if you turn it off (anytime, from the Dashboard).")
                     .font(.caption)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.tertiary)

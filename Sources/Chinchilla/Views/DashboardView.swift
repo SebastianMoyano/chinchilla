@@ -252,59 +252,94 @@ struct TabSaverCard: View {
 
     var body: some View {
         let model = appState.tabSaver
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                Image(systemName: "square.on.square.dashed")
-                    .font(.title2)
-                    .foregroundStyle(.indigo)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Tab Saver")
-                        .font(.callout.weight(.semibold))
-                    Text("For tab hoarders: background tabs stop rendering and free their memory (the browser's own Memory Saver).")
+        VStack(alignment: .leading, spacing: 14) {
+            Label("Too many tabs open?", systemImage: "square.on.square.dashed")
+                .font(.headline)
+
+            // 1 — Sleep background tabs (persistent switch)
+            HStack(alignment: .top, spacing: 10) {
+                stepBadge("1")
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text("Put background tabs to sleep")
+                            .font(.callout.weight(.medium))
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { model.anySaverOn },
+                            set: { model.setAllMemorySavers($0) }
+                        ))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .tint(.indigo)
+                        .disabled(model.policyBrowsers.isEmpty)
+                    }
+                    if model.policyBrowsers.isEmpty {
+                        Text("Needs Chrome, Edge or Brave — none found.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    } else {
+                        Text("Tabs you're not looking at free their memory; they reload when you click them. Nothing closes, nothing is lost.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            ForEach(model.policyBrowsers) { state in
+                                Label(state.browser.name, systemImage: state.memorySaverOn ? "checkmark.circle.fill" : "circle")
+                                    .font(.caption2)
+                                    .foregroundStyle(state.memorySaverOn ? .indigo : .secondary)
+                            }
+                            Text("· takes effect after restarting the browser")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        if model.anySaverOn {
+                            Text("Heads-up: the browser will say \"Managed by your organization\" while this is on. That's this switch — turn it off and the message disappears.")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
+            // 2 — Close duplicate tabs (one-time action)
+            HStack(alignment: .top, spacing: 10) {
+                stepBadge("2")
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text("Close repeated tabs")
+                            .font(.callout.weight(.medium))
+                        Spacer()
+                        if model.closingTabs {
+                            ProgressView().controlSize(.small)
+                        }
+                        Button("Close now") {
+                            model.closeDuplicates()
+                        }
+                        .disabled(model.closingTabs)
+                    }
+                    Text("If the same page is open more than once (Chrome and Safari), keeps the first one and closes the copies.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let report = model.lastReport {
+                        Text(verbatim: report)
+                            .font(.caption)
+                            .foregroundStyle(.indigo)
+                    }
                 }
-                Spacer()
-                Toggle("", isOn: Binding(
-                    get: { model.anySaverOn },
-                    set: { model.setAllMemorySavers($0) }
-                ))
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .tint(.indigo)
-                .disabled(model.policyBrowsers.isEmpty)
-            }
-            HStack(spacing: 8) {
-                if model.policyBrowsers.isEmpty {
-                    Text("No Chromium browser (Chrome, Edge, Brave) found.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                } else {
-                    Text("Applies to \(model.policyBrowsers.map(\.browser.name).joined(separator: ", ")) on next browser restart. The browser will show \"Managed by your organization\" while active — turning this off removes it completely.")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-                Spacer()
-                if model.closingTabs {
-                    ProgressView().controlSize(.small)
-                }
-                Button {
-                    model.closeDuplicates()
-                } label: {
-                    Label("Close duplicate tabs", systemImage: "rectangle.on.rectangle.slash")
-                }
-                .disabled(model.closingTabs)
-                .help("Chrome and Safari: closes tabs whose exact URL is already open, keeping one.")
-            }
-            if let report = model.lastReport {
-                Text(verbatim: report)
-                    .font(.caption)
-                    .foregroundStyle(.indigo)
             }
         }
         .padding(16)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
         .onAppear { model.refresh() }
+    }
+
+    private func stepBadge(_ number: String) -> some View {
+        Text(verbatim: number)
+            .font(.caption.bold())
+            .frame(width: 20, height: 20)
+            .background(.indigo.opacity(0.15), in: Circle())
+            .foregroundStyle(.indigo)
     }
 }
 
