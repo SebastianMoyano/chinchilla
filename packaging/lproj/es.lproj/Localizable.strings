@@ -172,6 +172,25 @@
 "Move the selected build artifacts to the Trash? The next install/build recreates them." = "¿Mover los artefactos seleccionados a la Papelera? La próxima instalación o build los recrea.";
 "Uninstall %@? Everything goes to the Trash and can be put back." = "¿Desinstalar %@? Todo va a la Papelera y puede recuperarse.";
 
+/* 0.3.0 */
+"Keep running when window closes" = "Seguir activa al cerrar la ventana";
+"Closing the main window keeps Chinchilla in the menu bar — gaming mode, the widget and the weekly clean stay alive." = "Al cerrar la ventana, Chinchilla sigue en la barra de menú: el modo gaming, el widget y la limpieza semanal continúan.";
+"Approve in Settings" = "Aprobar en Ajustes";
+"Approve Chinchilla in System Settings → Login Items to finish." = "Aprueba Chinchilla en Ajustes del Sistema → Ítems de inicio para terminar.";
+"Everything that starts with your Mac" = "Todo lo que arranca con tu Mac";
+"Show (admin)…" = "Mostrar (admin)…";
+"Refresh" = "Actualizar";
+"Modern login items and background daemons live in a database only readable with admin rights. Read-only — enable/disable them in System Settings → Login Items." = "Los ítems de inicio modernos y daemons viven en una base de datos que solo se lee con permisos de admin. Solo lectura: actívalos o desactívalos en Ajustes del Sistema → Ítems de inicio.";
+"Couldn't read the startup database." = "No se pudo leer la base de datos de inicio.";
+"Cancelled, or admin rights were denied." = "Cancelado, o se denegaron los permisos de admin.";
+"Local snapshots" = "Snapshots locales";
+"Thin…" = "Reducir…";
+"Time Machine keeps hourly snapshots on this disk. They can retain data you just deleted — macOS thins them automatically when space runs low." = "Time Machine guarda snapshots por hora en este disco. Pueden retener datos que acabas de borrar — macOS los reduce automáticamente cuando falta espacio.";
+"Asks macOS to thin local snapshots now (admin password required). macOS decides what's safe to remove." = "Pide a macOS reducir los snapshots locales ahora (requiere contraseña de admin). macOS decide qué es seguro eliminar.";
+"macOS thinned what it considered safe." = "macOS redujo lo que consideró seguro.";
+"Thinning was cancelled or failed." = "La reducción se canceló o falló.";
+"Finder may take a while to reflect this: %lld local Time Machine snapshots and purgeable space can hold on to deleted data. See the Dashboard for details." = "Finder puede tardar en reflejarlo: %lld snapshots locales de Time Machine y el espacio purgable pueden retener datos borrados. Mira el Panel para más detalle.";
+
 /* Startup */
 "Startup" = "Inicio";
 "Apps that open at login are managed by macOS." = "Las apps que se abren al iniciar sesión las gestiona macOS.";

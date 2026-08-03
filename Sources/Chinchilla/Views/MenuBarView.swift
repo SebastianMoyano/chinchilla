@@ -53,6 +53,15 @@ struct MenuBarView: View {
             }
             .toggleStyle(.switch)
 
+            Toggle(isOn: Binding(
+                get: { UserDefaults.standard.bool(forKey: AppDelegate.keepInMenuBarKey) },
+                set: { UserDefaults.standard.set($0, forKey: AppDelegate.keepInMenuBarKey) }
+            )) {
+                Label("Keep running when window closes", systemImage: "menubar.arrow.up.rectangle")
+            }
+            .toggleStyle(.switch)
+            .help("Closing the main window keeps Chinchilla in the menu bar — gaming mode, the widget and the weekly clean stay alive.")
+
             Divider()
 
             HStack {

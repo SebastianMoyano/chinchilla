@@ -56,6 +56,18 @@ Sin FDA, Safari, la Papelera y otras rutas protegidas no se pueden medir ni limp
 - Por defecto se borra a la Papelera; solo los caches `safe` se eliminan directo.
 - Todo queda registrado en `~/Library/Logs/Chinchilla/clean-history.jsonl`.
 
+## CLI
+
+El mismo binario funciona como herramienta de línea de comandos, con la misma SafetyPolicy, guarda de apps abiertas y registro de auditoría que la GUI:
+
+```bash
+alias chinchilla="/Applications/Chinchilla.app/Contents/MacOS/Chinchilla"
+chinchilla scan            # tabla de basura encontrada por categoría
+chinchilla scan --json     # ídem, JSON por ítem (para scripts)
+chinchilla clean           # dry-run de categorías seguras
+chinchilla clean --real    # limpia de verdad
+```
+
 ## Publicar una versión (DMG firmado y notarizado)
 
 Requisitos una sola vez:

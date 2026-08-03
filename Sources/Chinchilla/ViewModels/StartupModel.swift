@@ -23,6 +23,76 @@ final class StartupModel {
         }
     }
 
+    // MARK: - Full startup inventory (BTM database, needs admin)
+
+    struct BTMItem: Identifiable {
+        let id = UUID()
+        let name: String
+        let developer: String?
+        let type: String
+        let enabled: Bool
+    }
+
+    var btmItems: [BTMItem] = []
+    var btmLoading = false
+    var btmError: String?
+
+    /// Modern login items and daemons live in the Background Task Management
+    /// database, which only `sfltool dumpbtm` (admin) can enumerate. Shown
+    /// read-only — toggling belongs to System Settings, and we say so.
+    func loadFullInventory() {
+        guard !btmLoading else { return }
+        btmLoading = true
+        btmError = nil
+        Task {
+            defer { btmLoading = false }
+            do {
+                let output = try await PrivilegedRunner.run("/usr/bin/sfltool dumpbtm")
+                btmItems = Self.parseBTM(output)
+                if btmItems.isEmpty {
+                    btmError = String(localized: "Couldn't read the startup database.")
+                }
+            } catch {
+                btmError = String(localized: "Cancelled, or admin rights were denied.")
+            }
+        }
+    }
+
+    static func parseBTM(_ output: String) -> [BTMItem] {
+        var items: [BTMItem] = []
+        var name: String?
+        var developer: String?
+        var type = ""
+        var enabled = false
+
+        func flush() {
+            if let n = name, !n.isEmpty, n != "(null)" {
+                items.append(BTMItem(name: n, developer: developer, type: type, enabled: enabled))
+            }
+            name = nil
+            developer = nil
+            type = ""
+            enabled = false
+        }
+
+        for rawLine in output.split(separator: "\n") {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("Name:") {
+                flush()
+                name = String(line.dropFirst("Name:".count)).trimmingCharacters(in: .whitespaces)
+            } else if line.hasPrefix("Developer Name:") {
+                developer = String(line.dropFirst("Developer Name:".count)).trimmingCharacters(in: .whitespaces)
+                if developer == "(null)" { developer = nil }
+            } else if line.hasPrefix("Type:") {
+                type = String(line.dropFirst("Type:".count)).trimmingCharacters(in: .whitespaces)
+            } else if line.hasPrefix("Disposition:") {
+                enabled = line.contains("enabled")
+            }
+        }
+        flush()
+        return items.sorted { ($0.enabled ? 0 : 1, $0.name.lowercased()) < ($1.enabled ? 0 : 1, $1.name.lowercased()) }
+    }
+
     func toggle(_ agent: LaunchAgent) {
         guard !busyIDs.contains(agent.id) else { return }
         busyIDs.insert(agent.id)

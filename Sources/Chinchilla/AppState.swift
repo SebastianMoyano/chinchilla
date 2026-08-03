@@ -65,6 +65,7 @@ final class AppState {
     let desktopWidget = DesktopWidgetModel()
     let tabSaver = TabSaverModel()
     let updates = UpdateModel()
+    let snapshots = SnapshotModel()
 
     // MARK: Smart Scan — one click, three sweeps, one number.
 

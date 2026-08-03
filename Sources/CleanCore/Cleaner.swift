@@ -30,7 +30,12 @@ public enum Cleaner {
                 continue
             }
             let roots = rule.declaredRoots
-            if item.contentsOnly {
+            var isDir: ObjCBool = false
+            _ = FileManager.default.fileExists(atPath: item.path, isDirectory: &isDir)
+            // contentsOnly only makes sense for directories; loose files
+            // matched by the same glob (e.g. ~/Library/Caches/foo.cache)
+            // are deleted directly.
+            if item.contentsOnly && isDir.boolValue {
                 // An unreadable directory is a failure, not a silent success —
                 // otherwise we'd credit bytes we never deleted.
                 guard let children = try? FileManager.default.contentsOfDirectory(atPath: item.path) else {

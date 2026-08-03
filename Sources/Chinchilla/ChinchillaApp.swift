@@ -4,21 +4,55 @@ import UserNotifications
 import CleanCore
 import SystemKit
 
+/// Entry-point dispatcher: CLI subcommands run without ever spinning up the
+/// GUI; everything else launches the SwiftUI app.
+@main
+struct Main {
+    static func main() async {
+        if let command = ChinchillaCLI.command(from: CommandLine.arguments) {
+            let code = await ChinchillaCLI.run(command)
+            exit(code)
+        }
+        ChinchillaApp.main()
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    static let isScheduledRun = CommandLine.arguments.contains("--scheduled-clean")
+    static let isScheduledRun =
+        CommandLine.arguments.contains("--scheduled-clean")
+        || ProcessInfo.processInfo.environment["CHINCHILLA_SCHEDULED"] == "1"
+
+    static let keepInMenuBarKey = "keepInMenuBar"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if Self.isScheduledRun {
             runScheduledClean()
             return
         }
+        UserDefaults.standard.register(defaults: [Self.keepInMenuBarKey: true])
         // Essential when launched via `swift run` (no bundle); harmless when bundled.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// With "keep running in menu bar" on (default), closing the window
+    /// demotes the app to a menu-bar accessory instead of quitting — gaming
+    /// mode, the widget and the weekly schedule survive.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        !Self.isScheduledRun
+        if Self.isScheduledRun { return false }
+        if UserDefaults.standard.bool(forKey: Self.keepInMenuBarKey) {
+            NSApp.setActivationPolicy(.accessory)
+            return false
+        }
+        return true
+    }
+
+    /// Dock icon clicked (or app re-opened) with no windows: promote back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            NSApp.setActivationPolicy(.regular)
+        }
+        return true
     }
 
     /// Headless weekly clean: safe categories only, skipping anything whose
@@ -46,7 +80,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-@main
 struct ChinchillaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @State private var appState = AppState()

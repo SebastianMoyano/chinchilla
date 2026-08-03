@@ -11,6 +11,7 @@ struct StartupView: View {
             VStack(alignment: .leading, spacing: 20) {
                 loginItemsCard
                 agentsCard(model)
+                fullInventoryCard(model)
                 if !model.globalAgents.isEmpty {
                     globalCard(model)
                 }
@@ -113,6 +114,56 @@ struct StartupView: View {
                 Text(verbatim: error)
                     .font(.caption)
                     .foregroundStyle(.red)
+            }
+        }
+        .padding(18)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func fullInventoryCard(_ model: StartupModel) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Everything that starts with your Mac", systemImage: "list.bullet.rectangle")
+                    .font(.headline)
+                Spacer()
+                if model.btmLoading {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(model.btmItems.isEmpty ? "Show (admin)…" : "Refresh") {
+                        model.loadFullInventory()
+                    }
+                }
+            }
+            Text("Modern login items and background daemons live in a database only readable with admin rights. Read-only — enable/disable them in System Settings → Login Items.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let error = model.btmError {
+                Text(verbatim: error)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            ForEach(model.btmItems.prefix(60)) { item in
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(item.enabled ? Color.green : Color.secondary.opacity(0.4))
+                        .frame(width: 7, height: 7)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(verbatim: item.name)
+                            .font(.callout)
+                        if let developer = item.developer {
+                            Text(verbatim: developer)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    Spacer()
+                    Text(verbatim: item.type)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 1)
             }
         }
         .padding(18)

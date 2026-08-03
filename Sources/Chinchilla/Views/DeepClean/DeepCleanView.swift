@@ -156,6 +156,13 @@ struct DeepCleanView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
+                if outcome.dryRun == false, !appState.snapshots.snapshots.isEmpty {
+                    Text("Finder may take a while to reflect this: \(appState.snapshots.snapshots.count) local Time Machine snapshots and purgeable space can hold on to deleted data. See the Dashboard for details.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 440)
+                }
                 if !outcome.failures.isEmpty {
                     DisclosureGroup {
                         ScrollView {

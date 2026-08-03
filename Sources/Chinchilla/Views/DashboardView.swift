@@ -49,6 +49,7 @@ struct DashboardView: View {
         .onAppear {
             usage = DiskUsage.current()
             lastClean = Cleaner.lastClean()
+            appState.snapshots.refresh()
         }
     }
 
@@ -92,11 +93,40 @@ struct DashboardView: View {
                 statRow("Used", usage.used)
                 statRow("Free", usage.available)
                 statRow("Purgeable", usage.purgeable)
+                snapshotRow
             }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    @ViewBuilder
+    private var snapshotRow: some View {
+        let model = appState.snapshots
+        if !model.snapshots.isEmpty {
+            HStack {
+                Text("Local snapshots")
+                    .foregroundStyle(.secondary)
+                    .help("Time Machine keeps hourly snapshots on this disk. They can retain data you just deleted — macOS thins them automatically when space runs low.")
+                Spacer()
+                Text("\(model.snapshots.count)")
+                    .monospacedDigit()
+                if model.thinning {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Button("Thin…") { model.thin() }
+                        .controlSize(.mini)
+                        .help("Asks macOS to thin local snapshots now (admin password required). macOS decides what's safe to remove.")
+                }
+            }
+            .font(.callout)
+            if let result = model.thinResult {
+                Text(verbatim: result)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func statRow(_ title: LocalizedStringKey, _ bytes: Int64) -> some View {
@@ -298,6 +328,10 @@ struct AutoCleanCard: View {
                 Text(verbatim: error)
                     .font(.caption)
                     .foregroundStyle(.red)
+            }
+            if schedule.needsApproval {
+                Button("Approve in Settings") { schedule.openLoginItemsSettings() }
+                    .controlSize(.small)
             }
             Spacer()
             Toggle("", isOn: Binding(

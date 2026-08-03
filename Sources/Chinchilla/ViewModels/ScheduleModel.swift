@@ -1,21 +1,40 @@
 import SwiftUI
 import Observation
+import ServiceManagement
 import UserNotifications
 import SystemKit
 
-/// Weekly automatic clean: a user LaunchAgent runs the app headless with
-/// `--scheduled-clean` (Sundays 12:00). Only `safe` categories, real delete,
-/// result lands in the notification center and the audit log.
+/// Weekly automatic clean, registered through SMAppService (the modern
+/// login-item API): no baked executable paths, survives app moves, and shows
+/// up properly in System Settings → Login Items. Runs the app headless with
+/// CHINCHILLA_SCHEDULED=1 (Sundays 12:00), safe categories only.
 @MainActor
 @Observable
 final class ScheduleModel {
-    static let label = "com.sebastian.chinchilla.autoclean"
-    static var plistPath: String {
-        NSHomeDirectory() + "/Library/LaunchAgents/\(label).plist"
+    static let agentPlistName = "com.sebastian.chinchilla.autoclean.plist"
+    /// Pre-0.3.0 installs used a hand-written user LaunchAgent — migrate it out.
+    static var legacyPlistPath: String {
+        NSHomeDirectory() + "/Library/LaunchAgents/com.sebastian.chinchilla.autoclean.plist"
     }
 
-    var isEnabled = FileManager.default.fileExists(atPath: ScheduleModel.plistPath)
+    private let service = SMAppService.agent(plistName: ScheduleModel.agentPlistName)
+
+    var isEnabled = false
+    var needsApproval = false
     var errorMessage: String?
+
+    init() {
+        refreshStatus()
+    }
+
+    func refreshStatus() {
+        isEnabled = service.status == .enabled
+        needsApproval = service.status == .requiresApproval
+    }
+
+    struct ScheduleError: LocalizedError {
+        let errorDescription: String?
+    }
 
     func toggle(_ on: Bool) {
         errorMessage = nil
@@ -24,30 +43,26 @@ final class ScheduleModel {
                 if on {
                     try await enable()
                 } else {
-                    try await disable()
+                    try disable()
                 }
-                isEnabled = FileManager.default.fileExists(atPath: Self.plistPath)
             } catch {
                 errorMessage = error.localizedDescription
-                isEnabled = FileManager.default.fileExists(atPath: Self.plistPath)
             }
+            refreshStatus()
         }
     }
 
-    struct ScheduleError: LocalizedError {
-        let errorDescription: String?
+    func openLoginItemsSettings() {
+        SMAppService.openSystemSettingsLoginItems()
     }
 
     private func enable() async throws {
-        // The agent plist bakes in the executable path — only a real installed
-        // bundle survives rebuilds and relaunches.
-        guard Bundle.main.bundleIdentifier != nil,
-              let executable = Bundle.main.executablePath,
-              !executable.contains("/.build/") else {
+        guard Bundle.main.bundleIdentifier != nil else {
             throw ScheduleError(errorDescription: String(
                 localized: "Run the installed app (e.g. /Applications/Chinchilla.app) to enable scheduling."
             ))
         }
+        await migrateLegacyAgent()
 
         // Ask for notification permission so the weekly result is visible;
         // if denied, warn — the clean would otherwise run invisibly.
@@ -58,29 +73,29 @@ final class ScheduleModel {
                 localized: "Notifications are off — the weekly clean will run silently. You can still check the log in Deep Clean."
             )
         }
-        let plist: [String: Any] = [
-            "Label": Self.label,
-            "ProgramArguments": [executable, "--scheduled-clean"],
-            "StartCalendarInterval": ["Weekday": 0, "Hour": 12, "Minute": 0],
-            "RunAtLoad": false,
-        ]
-        let data = try PropertyListSerialization.data(
-            fromPropertyList: plist, format: .xml, options: 0
-        )
-        let dir = (Self.plistPath as NSString).deletingLastPathComponent
-        try FileManager.default.createDirectory(
-            atPath: dir, withIntermediateDirectories: true
-        )
-        try data.write(to: URL(fileURLWithPath: Self.plistPath))
-        _ = try? await ShellRunner.run(
-            "/bin/launchctl", ["bootstrap", "gui/\(getuid())", Self.plistPath], timeout: .seconds(10)
-        )
+
+        try service.register()
+        if service.status == .requiresApproval {
+            errorMessage = String(
+                localized: "Approve Chinchilla in System Settings → Login Items to finish."
+            )
+            SMAppService.openSystemSettingsLoginItems()
+        }
     }
 
-    private func disable() async throws {
+    private func disable() throws {
+        try service.unregister()
+    }
+
+    /// Removes the pre-0.3.0 hand-written LaunchAgent if present.
+    private func migrateLegacyAgent() async {
+        let legacy = Self.legacyPlistPath
+        guard FileManager.default.fileExists(atPath: legacy) else { return }
         _ = try? await ShellRunner.run(
-            "/bin/launchctl", ["bootout", "gui/\(getuid())/\(Self.label)"], timeout: .seconds(10)
+            "/bin/launchctl",
+            ["bootout", "gui/\(getuid())/com.sebastian.chinchilla.autoclean"],
+            timeout: .seconds(10)
         )
-        try FileManager.default.removeItem(atPath: Self.plistPath)
+        try? FileManager.default.removeItem(atPath: legacy)
     }
 }

@@ -34,6 +34,10 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 # Localizations
 cp -R "$ROOT/packaging/lproj/"*.lproj "$APP/Contents/Resources/"
 
+# SMAppService agent (weekly auto-clean) — must live inside the bundle.
+mkdir -p "$APP/Contents/Library/LaunchAgents"
+cp "$ROOT/packaging/com.sebastian.chinchilla.autoclean.plist" "$APP/Contents/Library/LaunchAgents/"
+
 # SPM resource bundles (if any target declares resources)
 find "$ROOT/.build/$CONFIG" -maxdepth 1 -name '*.bundle' -exec cp -R {} "$APP/Contents/Resources/" \; 2>/dev/null || true
 
