@@ -69,18 +69,36 @@ struct StartupView: View {
 
             ForEach(model.userAgents) { agent in
                 HStack(spacing: 10) {
-                    Toggle(isOn: Binding(
-                        get: { !agent.isDisabled },
-                        set: { _ in model.toggle(agent) }
-                    )) { EmptyView() }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .labelsHidden()
-                    .disabled(model.busyIDs.contains(agent.id) || agent.label.hasPrefix("com.apple."))
+                    if LaunchAgentManager.isOwnAgent(agent.label) {
+                        // Never hidden (that's what shady apps do) — locked,
+                        // with an explanation of where it's actually managed.
+                        Image(systemName: "lock.fill")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 26)
+                            .help("This is Chinchilla itself (weekly clean / Everyday mode). It's managed from the Dashboard toggles — locked here so it can't be removed by accident.")
+                    } else {
+                        Toggle(isOn: Binding(
+                            get: { !agent.isDisabled },
+                            set: { _ in model.toggle(agent) }
+                        )) { EmptyView() }
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .labelsHidden()
+                        .disabled(model.busyIDs.contains(agent.id) || agent.label.hasPrefix("com.apple."))
+                    }
 
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(verbatim: agent.label)
-                            .fontWeight(.medium)
+                        HStack(spacing: 6) {
+                            Text(verbatim: agent.label)
+                                .fontWeight(.medium)
+                            if LaunchAgentManager.isOwnAgent(agent.label) {
+                                Text("Chinchilla — managed from the Dashboard")
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(.purple.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(.purple)
+                            }
+                        }
                         if let program = agent.program {
                             Text(verbatim: program)
                                 .font(.caption2)
@@ -150,8 +168,17 @@ struct StartupView: View {
                         .fill(item.enabled ? Color.green : Color.secondary.opacity(0.4))
                         .frame(width: 7, height: 7)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(verbatim: item.name)
-                            .font(.callout)
+                        HStack(spacing: 6) {
+                            Text(verbatim: item.name)
+                                .font(.callout)
+                            if item.name.lowercased().contains("chinchilla") {
+                                Text("that's us")
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(.purple.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(.purple)
+                            }
+                        }
                         if let developer = item.developer {
                             Text(verbatim: developer)
                                 .font(.caption2)

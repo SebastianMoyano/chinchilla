@@ -102,6 +102,12 @@ public enum LaunchAgentManager {
         public let description: String
     }
 
+    /// Chinchilla's own agents are managed from the Dashboard toggles —
+    /// disabling them here by accident would silently kill Everyday mode.
+    public static func isOwnAgent(_ label: String) -> Bool {
+        label.hasPrefix("com.sebastian.chinchilla")
+    }
+
     /// Unloads now and parks the plist so it won't load on next login.
     public static func disable(_ agent: LaunchAgent) async throws {
         guard agent.domain == .user else {
@@ -109,6 +115,9 @@ public enum LaunchAgentManager {
         }
         guard !agent.label.hasPrefix("com.apple.") else {
             throw AgentError(description: "Apple agents are protected.")
+        }
+        guard !isOwnAgent(agent.label) else {
+            throw AgentError(description: "This is Chinchilla itself — use the Dashboard toggles instead.")
         }
         // Bootout may fail if not currently loaded — that's fine.
         _ = try? await ShellRunner.run(
