@@ -80,11 +80,36 @@ final class AppState {
     let health = HealthModel()
     let cast = CastModel()
 
+    let stalls = StallDetector()
+
     init() {
         dailyBoost.appState = self
         dailyBoost.startIfEnabled()
         // Never leave apps frozen by a crashed gaming session.
         gaming.resumeOrphanedPauses()
+        stalls.context = { [weak self] in self?.stallContext ?? "unknown" }
+        stalls.start()
+    }
+
+    /// What the app was doing, for the stall log. Anything that puts a
+    /// spinner or live view on screen belongs here.
+    private var stallContext: String {
+        var parts = ["screen=\(selection)"]
+        if health.loading { parts.append("health.loading") }
+        if health.fixRunning != nil { parts.append("health.fix") }
+        if health.snappyBusy { parts.append("health.snappy") }
+        if !health.brewBusy.isEmpty { parts.append("health.brew") }
+        if startup.loading { parts.append("startup.loading") }
+        if cast.mirroring { parts.append("cast.mirroring") }
+        if cast.mirrorStarting { parts.append("cast.mirrorStarting") }
+        if smartScanRunning { parts.append("smartScan") }
+        if deepClean.phase != .idle { parts.append("deepClean.\(deepClean.phase)") }
+        if diskAnalyzer.phase != .idle { parts.append("disk.\(diskAnalyzer.phase)") }
+        if devTools.pruneRunning { parts.append("devTools.prune") }
+        if memory.refreshing { parts.append("memory.refreshing") }
+        if memory.appleIntelligenceBusy { parts.append("memory.appleIntelligence") }
+        if updates.installPhase != .idle { parts.append("update.\(updates.installPhase)") }
+        return parts.joined(separator: " ")
     }
 
     // MARK: Smart Scan — one click, three sweeps, one number.

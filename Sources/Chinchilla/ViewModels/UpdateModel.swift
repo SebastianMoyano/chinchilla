@@ -108,6 +108,16 @@ final class UpdateModel {
             return
         }
         installPhase = .downloading
+        BusyDeadline.arm("Update.install", .seconds(900)) { [weak self] in
+            switch self?.installPhase {
+            case .downloading, .installing: true
+            default: false
+            }
+        } clear: { [weak self] in
+            self?.installPhase = .failed(
+                String(localized: "Update failed — opening the download page instead.")
+            )
+        }
         Task {
             do {
                 try await performInstall(from: dmgURL)
@@ -123,9 +133,20 @@ final class UpdateModel {
         let reason: String
     }
 
+    /// `URLSession.shared` gives a resource timeout of seven days. A download
+    /// that stalls would leave the toolbar spinner turning for a week, and a
+    /// spinner that never stops repaints the window at display rate — one
+    /// core, indefinitely. Ten minutes is generous for a 20 MB DMG.
+    private static let downloadSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 60
+        configuration.timeoutIntervalForResource = 600
+        return URLSession(configuration: configuration)
+    }()
+
     private func performInstall(from url: URL) async throws {
         // 1. Download.
-        let (tempFile, _) = try await URLSession.shared.download(from: url)
+        let (tempFile, _) = try await Self.downloadSession.download(from: url)
         let dmgPath = tempFile.deletingPathExtension().appendingPathExtension("dmg")
         try? FileManager.default.removeItem(at: dmgPath)
         try FileManager.default.moveItem(at: tempFile, to: dmgPath)

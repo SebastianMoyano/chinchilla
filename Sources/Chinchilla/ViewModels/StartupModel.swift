@@ -20,11 +20,16 @@ final class StartupModel {
         agents = LaunchAgentManager.listAgents()
         // Phase 2: probe launchd in parallel; badges fill in when ready.
         loading = true
+        BusyDeadline.arm("Startup.loading", .seconds(30)) { [weak self] in
+            self?.loading ?? false
+        } clear: { [weak self] in
+            self?.loading = false
+        }
         Task {
+            defer { loading = false }
             let labels = agents.filter { !$0.isDisabled }.map(\.label)
             let loaded = await LaunchAgentManager.loadedStatus(for: labels)
             agents = agents.map { $0.withLoaded(loaded.contains($0.label)) }
-            loading = false
         }
     }
 

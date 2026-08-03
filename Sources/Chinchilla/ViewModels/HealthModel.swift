@@ -29,8 +29,13 @@ final class HealthModel {
         loading = true
         snappyOn = SnappyUI.isApplied
         Task {
+            defer { loading = false }
             report = await HealthCheck.run()
-            loading = false
+        }
+        BusyDeadline.arm("Health.loading", .seconds(30)) { [weak self] in
+            self?.loading ?? false
+        } clear: { [weak self] in
+            self?.loading = false
         }
         Task {
             brewServices = await BrewServices.list()
@@ -41,6 +46,11 @@ final class HealthModel {
         guard fixRunning == nil else { return }
         fixRunning = id
         fixResult = nil
+        BusyDeadline.arm("Health.fix(\(id))", .seconds(180)) { [weak self] in
+            self?.fixRunning == id
+        } clear: { [weak self] in
+            self?.fixRunning = nil
+        }
         Task {
             defer { fixRunning = nil }
             do {
@@ -55,20 +65,30 @@ final class HealthModel {
     func toggleSnappy(_ on: Bool) {
         guard !snappyBusy else { return }
         snappyBusy = true
+        BusyDeadline.arm("Health.snappy", .seconds(60)) { [weak self] in
+            self?.snappyBusy ?? false
+        } clear: { [weak self] in
+            self?.snappyBusy = false
+        }
         Task {
+            defer { snappyBusy = false }
             if on { await SnappyUI.apply() } else { await SnappyUI.revert() }
             snappyOn = SnappyUI.isApplied
-            snappyBusy = false
         }
     }
 
     func stopBrewService(_ name: String) {
         guard !brewBusy.contains(name) else { return }
         brewBusy.insert(name)
+        BusyDeadline.arm("Health.brew(\(name))", .seconds(90)) { [weak self] in
+            self?.brewBusy.contains(name) ?? false
+        } clear: { [weak self] in
+            self?.brewBusy.remove(name)
+        }
         Task {
+            defer { brewBusy.remove(name) }
             await BrewServices.stopService(name)
             brewServices = await BrewServices.list()
-            brewBusy.remove(name)
         }
     }
 }
