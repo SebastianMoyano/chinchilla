@@ -241,12 +241,12 @@
 "Needs Chrome, Edge or Brave — none found." = "Requiere Chrome, Edge o Brave — no se encontró ninguno.";
 "Tabs you're not looking at free their memory; they reload when you click them. Nothing closes, nothing is lost." = "Las pestañas que no estás mirando liberan su memoria; se recargan al hacerles clic. No se cierra nada, no se pierde nada.";
 "· takes effect after restarting the browser" = "· aplica al reiniciar el navegador";
-"Heads-up: the browser will say \"Managed by your organization\" while this is on. That's this switch — turn it off and the message disappears." = "Ojo: el navegador dirá \"Administrado por tu organización\" mientras esté activo. Ese mensaje es este switch — apágalo y desaparece.";
+"Verify it in chrome://settings/performance — \"Memory Saver\" should be on. Depending on the Chrome version it may also mention \"Managed by your organization\"; that's this switch, and turning it off removes it." = "Verifícalo en chrome://settings/performance — \"Ahorro de memoria\" debería estar activado. Según la versión de Chrome puede además mencionar \"Administrado por tu organización\"; ese mensaje es este switch, y apagarlo lo quita.";
 "Close repeated tabs" = "Cerrar pestañas repetidas";
 "Close now" = "Cerrar ahora";
 "If the same page is open more than once (Chrome and Safari), keeps the first one and closes the copies." = "Si la misma página está abierta más de una vez (Chrome y Safari), conserva la primera y cierra las copias.";
 "Chinchilla can tell your browser to put tabs you're not looking at to sleep: they free their memory and reload when you click them. Nothing closes, nothing is lost — your Mac just breathes easier." = "Chinchilla puede pedirle a tu navegador que duerma las pestañas que no estás mirando: liberan su memoria y se recargan al hacerles clic. No se cierra nada, no se pierde nada — tu Mac simplemente respira mejor.";
-"Takes effect after restarting the browser. It will say \"Managed by your organization\" while this is on — that message is this switch, and it disappears if you turn it off (anytime, from the Dashboard)." = "Aplica al reiniciar el navegador. Dirá \"Administrado por tu organización\" mientras esté activo — ese mensaje es este switch, y desaparece si lo apagas (cuando quieras, desde el Panel).";
+"Takes effect after restarting the browser (check chrome://settings/performance — \"Memory Saver\" on). Some Chrome versions may mention \"Managed by your organization\": that's this switch, gone when you turn it off." = "Aplica al reiniciar el navegador (verifica en chrome://settings/performance — \"Ahorro de memoria\" activado). Algunas versiones de Chrome pueden mencionar \"Administrado por tu organización\": es este switch, y desaparece al apagarlo.";
 
 /* Memory Doctor (0.4.0) */
 "Memory: all good" = "Memoria: todo bien";

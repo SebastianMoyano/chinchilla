@@ -294,7 +294,7 @@ struct TabSaverCard: View {
                                 .foregroundStyle(.tertiary)
                         }
                         if model.anySaverOn {
-                            Text("Heads-up: the browser will say \"Managed by your organization\" while this is on. That's this switch — turn it off and the message disappears.")
+                            Text("Verify it in chrome://settings/performance — \"Memory Saver\" should be on. Depending on the Chrome version it may also mention \"Managed by your organization\"; that's this switch, and turning it off removes it.")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }

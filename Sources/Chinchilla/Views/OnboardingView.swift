@@ -168,7 +168,7 @@ struct OnboardingView: View {
                 }
                 .toggleStyle(.switch)
                 .tint(.indigo)
-                Text("Takes effect after restarting the browser. It will say \"Managed by your organization\" while this is on — that message is this switch, and it disappears if you turn it off (anytime, from the Dashboard).")
+                Text("Takes effect after restarting the browser (check chrome://settings/performance — \"Memory Saver\" on). Some Chrome versions may mention \"Managed by your organization\": that's this switch, gone when you turn it off.")
                     .font(.caption)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.tertiary)
