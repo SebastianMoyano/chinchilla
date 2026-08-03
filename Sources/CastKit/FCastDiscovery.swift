@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Synchronization
 
 public struct FCastDevice: Sendable, Identifiable, Hashable {
     public let name: String
@@ -67,5 +68,98 @@ public final class FCastDiscovery: @unchecked Sendable {
     public func stop() {
         browser?.cancel()
         browser = nil
+    }
+}
+
+/// Browses _googlecast._tcp (Chromecast built-in — most Android TVs).
+/// Resolving to an IP needs a connection attempt, so we hand back the
+/// endpoint and let the session resolve it.
+public final class GoogleCastDiscovery: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "cast.googlecast.discovery")
+    private var browser: NWBrowser?
+
+    public init() {}
+
+    public func start(onDevices: @escaping @Sendable ([GoogleCastDevice]) -> Void) {
+        stop()
+        let browser = NWBrowser(
+            for: .bonjour(type: "_googlecast._tcp", domain: nil),
+            using: NWParameters(tls: nil, tcp: NWProtocolTCP.Options())
+        )
+        browser.browseResultsChangedHandler = { results, _ in
+            Task {
+                var devices: [GoogleCastDevice] = []
+                for result in results {
+                    guard case .service(let name, _, _, _) = result.endpoint else { continue }
+                    // TXT record carries the human-friendly name ("fn").
+                    var friendly = Self.prettify(name)
+                    if case .bonjour(let txt) = result.metadata,
+                       let fn = txt["fn"], !fn.isEmpty {
+                        friendly = fn
+                    }
+                    if let host = await Self.resolveHost(result.endpoint) {
+                        devices.append(GoogleCastDevice(name: friendly, host: host))
+                    }
+                }
+                onDevices(devices.sorted { $0.name < $1.name })
+            }
+        }
+        self.browser = browser
+        browser.start(queue: queue)
+    }
+
+    public func stop() {
+        browser?.cancel()
+        browser = nil
+    }
+
+    /// mDNS instance names look like "4K-SMART-TV-24b1993e381d…" — drop the
+    /// trailing UUID and restore spaces.
+    static func prettify(_ instanceName: String) -> String {
+        var name = instanceName
+        if let dash = name.lastIndex(of: "-"),
+           name[name.index(after: dash)...].count >= 24 {
+            name = String(name[..<dash])
+        }
+        return name.replacingOccurrences(of: "-", with: " ")
+    }
+
+    /// Resolves a Bonjour endpoint to an IPv4 literal by opening (and
+    /// immediately cancelling) a connection — Network.framework exposes the
+    /// resolved path this way.
+    static func resolveHost(_ endpoint: NWEndpoint) async -> String? {
+        // One-shot guard shared by the state handler and the timeout.
+        let resumed = Mutex(false)
+        return await withCheckedContinuation { continuation in
+            let connection = NWConnection(to: endpoint, using: .tcp)
+            @Sendable func finish(_ host: String?) {
+                let first = resumed.withLock { value -> Bool in
+                    guard !value else { return false }
+                    value = true
+                    return true
+                }
+                guard first else { return }
+                connection.cancel()
+                continuation.resume(returning: host)
+            }
+            connection.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    var host: String?
+                    if case .hostPort(let remote, _) = connection.currentPath?.remoteEndpoint,
+                       case .ipv4(let address) = remote {
+                        host = "\(address)".components(separatedBy: "%").first
+                    }
+                    finish(host)
+                case .failed, .cancelled:
+                    finish(nil)
+                default:
+                    break
+                }
+            }
+            connection.start(queue: DispatchQueue(label: "cast.resolve"))
+            // Never hang the browse on one unreachable device.
+            DispatchQueue.global().asyncAfter(deadline: .now() + 3) { finish(nil) }
+        }
     }
 }

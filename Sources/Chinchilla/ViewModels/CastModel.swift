@@ -11,6 +11,8 @@ struct CastTarget: Identifiable, Hashable {
         case fcast(FCastDevice)
         /// Works with the TV you already own — nothing to install.
         case dlna(DLNARenderer)
+        /// Chromecast built-in: what most Android TVs speak out of the box.
+        case googlecast(GoogleCastDevice)
     }
 
     let id: String
@@ -21,6 +23,7 @@ struct CastTarget: Identifiable, Hashable {
         switch kind {
         case .fcast: "FCast"
         case .dlna: "DLNA"
+        case .googlecast: "Chromecast"
         }
     }
 
@@ -59,6 +62,10 @@ final class CastModel {
     private let discovery = FCastDiscovery()
     private let server = CastHTTPServer()
     private var fcastDevices: [FCastDevice] = []
+    private var castDevices: [GoogleCastDevice] = []
+    private let castDiscovery = GoogleCastDiscovery()
+    private var castSession: GoogleCastSession?
+    private var castEventsTask: Task<Void, Never>?
     private var dlnaRenderers: [DLNARenderer] = []
     private var awaitingFetch = false
 
@@ -80,6 +87,13 @@ final class CastModel {
                 }
             )
         }
+        // Google Cast (Chromecast built-in): continuous Bonjour browse.
+        castDiscovery.start { devices in
+            Task { @MainActor [weak self] in
+                self?.castDevices = devices
+                self?.rebuildTargets()
+            }
+        }
         // DLNA: one SSDP sweep per refresh.
         Task {
             let locations = await SSDP.discoverRenderers()
@@ -99,6 +113,9 @@ final class CastModel {
         var list: [CastTarget] = fcastDevices.map {
             CastTarget(id: "fcast:\($0.name)", name: $0.name, kind: .fcast($0))
         }
+        list += castDevices.map {
+            CastTarget(id: "cast:\($0.id)", name: $0.name, kind: .googlecast($0))
+        }
         list += dlnaRenderers.map {
             CastTarget(id: "dlna:\($0.avTransportURL.absoluteString)", name: $0.name, kind: .dlna($0))
         }
@@ -107,6 +124,7 @@ final class CastModel {
     }
 
     func stopDiscovery() {
+        castDiscovery.stop()
         discovery.stop()
         discoveryState = .idle
     }
@@ -144,14 +162,47 @@ final class CastModel {
         case .dlna:
             // DLNA is stateless HTTP — nothing to hold open.
             sessionState = .ready
+        case .googlecast(let device):
+            let session = GoogleCastSession(device: device)
+            castSession = session
+            sessionState = .connecting
+            castEventsTask = Task { [weak self] in
+                let stream = await session.events
+                for await event in stream {
+                    await self?.handle(cast: event)
+                }
+            }
+            Task { await session.connect() }
+        }
+    }
+
+    private func handle(cast event: GoogleCastEvent) {
+        switch event {
+        case .state(let state):
+            sessionState = state
+            if state == .closed { castingName = nil }
+        case .media(let time, let duration, let playerState):
+            playbackTime = time
+            if duration > 0 { playbackDuration = duration }
+            playbackState = playerState == "PLAYING" ? 1 : (playerState == "PAUSED" ? 2 : 0)
+            if playbackState != 0 {
+                awaitingFetch = false
+                firewallHint = false
+            }
+        case .error(let message):
+            lastError = message
         }
     }
 
     func disconnect() {
         let old = session
+        let oldCast = castSession
         Task { await old?.close() }
+        Task { await oldCast?.close() }
         session = nil
+        castSession = nil
         eventsTask?.cancel()
+        castEventsTask?.cancel()
         pollTask?.cancel()
         pollTask = nil
         connected = nil
@@ -185,6 +236,7 @@ final class CastModel {
     private var targetHost: String? {
         switch connected?.kind {
         case .dlna(let renderer): renderer.avTransportURL.host
+        case .googlecast(let device): device.host
         case .fcast(let device):
             if case .hostPort(let host, _) = device.endpoint {
                 switch host {
@@ -241,6 +293,8 @@ final class CastModel {
             switch target.kind {
             case .fcast:
                 await session?.play(FCastPlayMessage(container: mime, url: mediaURL))
+            case .googlecast:
+                await castSession?.load(url: mediaURL, mime: mime, title: url.lastPathComponent)
             case .dlna(let renderer):
                 do {
                     try await DLNAControl.play(
@@ -288,6 +342,8 @@ final class CastModel {
             switch target.kind {
             case .fcast:
                 paused ? await session?.resume() : await session?.pause()
+            case .googlecast:
+                paused ? await castSession?.play() : await castSession?.pause()
             case .dlna(let renderer):
                 if paused {
                     try? await DLNAControl.resume(renderer)
@@ -306,6 +362,7 @@ final class CastModel {
         Task {
             switch target.kind {
             case .fcast: await session?.stop()
+            case .googlecast: await castSession?.stop()
             case .dlna(let renderer): try? await DLNAControl.stop(renderer)
             }
         }
@@ -317,6 +374,7 @@ final class CastModel {
         Task {
             switch target.kind {
             case .fcast: await session?.seek(to: time)
+            case .googlecast: await castSession?.seek(to: time)
             case .dlna(let renderer): try? await DLNAControl.seek(renderer, to: time)
             }
         }
@@ -328,6 +386,7 @@ final class CastModel {
         Task {
             switch target.kind {
             case .fcast: await session?.setVolume(value)
+            case .googlecast: await castSession?.setVolume(value)
             case .dlna(let renderer): try? await DLNAControl.setVolume(renderer, volume: value)
             }
         }

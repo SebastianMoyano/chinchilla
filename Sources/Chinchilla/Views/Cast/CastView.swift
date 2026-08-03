@@ -257,8 +257,8 @@ struct ReceiverGuideCard: View {
                 text: "Samsung, LG, Sony, TCL, Philips and friends answer over DLNA out of the box. They show up here on their own; just make sure the TV is on and on the same Wi-Fi."
             )
             guideRow(
-                brand: "Android TV / Google TV",
-                text: "Install \"FCast Receiver\" from the Play Store and open it for the FCast path (better controls and, later, screen mirroring)."
+                brand: "Android TV / Google TV — nothing to install either",
+                text: "Most of them have Chromecast built in, so they show up here on their own. Installing \"FCast Receiver\" from the Play Store is optional — it unlocks the FCast path (and, later, screen mirroring)."
             )
             guideRow(
                 brand: "Screen mirroring today",

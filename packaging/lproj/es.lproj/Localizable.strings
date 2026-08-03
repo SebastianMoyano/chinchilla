@@ -436,3 +436,9 @@
 "TV's IP address" = "IP del TV";
 "The TV's address, for FCast receivers on networks where automatic discovery is blocked." = "La dirección del TV, para receptores FCast en redes donde el descubrimiento automático está bloqueado.";
 "This Mac serves from %@ — the TV must be able to reach that address." = "Este Mac sirve desde %@ — el TV debe poder alcanzar esa dirección.";
+
+/* Google Cast (0.9.3) */
+"Chromecast" = "Chromecast";
+"Android TV / Google TV — nothing to install either" = "Android TV / Google TV — tampoco hay que instalar nada";
+"Most of them have Chromecast built in, so they show up here on their own. Installing \"FCast Receiver\" from the Play Store is optional — it unlocks the FCast path (and, later, screen mirroring)." = "La mayoría trae Chromecast integrado, así que aparecen aquí solos. Instalar \"FCast Receiver\" desde la Play Store es opcional — habilita la vía FCast (y, más adelante, el espejo de pantalla).";
+"Looking for TVs — Chromecast built-in, DLNA smart TVs and FCast receivers. Most TVs need nothing installed." = "Buscando TVs — Chromecast integrado, smart TVs con DLNA y receptores FCast. La mayoría no necesita instalar nada.";
