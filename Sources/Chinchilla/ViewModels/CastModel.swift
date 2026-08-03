@@ -116,8 +116,33 @@ final class CastModel {
                     mirrorError = String(localized: "Couldn't start the local server.")
                     return
                 }
-                // Serve the live playlist and its rolling segments from memory.
+                // Two ways to feed the TV:
+                //  • progressive fMP4 — one long-lived response, the same
+                //    container TVs already play for files. Lower latency and
+                //    what actually renders on Chromecast receivers.
+                //  • HLS — kept for FCast receivers, which expect a playlist.
                 let store = streamer.store
+                server.setStreamRoute("/mirror/live.mp4") { writer in
+                    Task {
+                        var waited = 0
+                        while store.initSegmentData() == nil, waited < 100 {
+                            try? await Task.sleep(for: .milliseconds(100))
+                            waited += 1
+                        }
+                        guard let header = store.initSegmentData(), writer.write(header) else {
+                            writer.finish()
+                            return
+                        }
+                        let subscription = store.subscribe { fragment in
+                            _ = writer.write(fragment)
+                        }
+                        while store.hasContent {
+                            try? await Task.sleep(for: .seconds(1))
+                        }
+                        store.unsubscribe(subscription)
+                        writer.finish()
+                    }
+                }
                 server.setPrefixRoute("/mirror/") { path in
                     if path == "stream.m3u8" {
                         return ("application/x-mpegurl", Data(store.playlist().utf8))
@@ -140,24 +165,28 @@ final class CastModel {
                 }
                 try await streamer.start(quality: mirrorQuality, includeAudio: mirrorAudio)
                 // Don't hand the TV a playlist before the first segment exists.
-                guard await streamer.waitForFirstSegment() else {
+                // Progressive needs only the init segment; HLS wants a few
+                // parts in the playlist before a player will touch it.
+                let needed = { if case .googlecast = target.kind { 1 } else { 4 } }()
+                guard await streamer.waitForFirstSegment(minimumSegments: needed) else {
                     await streamer.stop()
                     mirrorError = String(localized: "The screen encoder didn't produce video. Try again.")
                     return
                 }
-                let url = "http://\(ip):\(server.port)/mirror/stream.m3u8"
+                let base = "http://\(ip):\(server.port)/mirror"
                 castingName = String(localized: "Your screen")
                 mirroring = true
                 playbackState = 1
                 switch target.kind {
                 case .googlecast:
                     await castSession?.load(
-                        url: url, mime: "application/x-mpegurl",
+                        url: "\(base)/live.mp4", mime: "video/mp4",
                         title: String(localized: "Mac screen"), live: true
                     )
                 case .fcast:
                     await session?.play(FCastPlayMessage(
-                        container: "application/vnd.apple.mpegurl", url: url
+                        container: "application/vnd.apple.mpegurl",
+                        url: "\(base)/stream.m3u8"
                     ))
                 case .dlna:
                     break
@@ -178,6 +207,7 @@ final class CastModel {
         Task {
             await streamer.stop()
             server.setPrefixRoute("/mirror/", handler: nil)
+            server.setStreamRoute("/mirror/live.mp4", handler: nil)
             switch target?.kind {
             case .googlecast: await castSession?.stop()
             case .fcast: await session?.stop()

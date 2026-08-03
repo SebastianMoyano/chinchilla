@@ -11,6 +11,7 @@ enum ChinchillaCLI {
         case scan(json: Bool)
         case clean(real: Bool)
         case mirrorTest(host: String)
+        case gameStreamTest(seconds: Int)
         case help
     }
 
@@ -22,6 +23,8 @@ enum ChinchillaCLI {
             return .scan(json: args.contains("--json"))
         case "clean":
             return .clean(real: args.contains("--real"))
+        case "gamestream-test":
+            return .gameStreamTest(seconds: args.count > 1 ? (Int(args[1]) ?? 180) : 180)
         case "mirror-test":
             return .mirrorTest(host: args.count > 1 ? args[1] : "")
         case "help", "--help", "-h":
@@ -36,6 +39,8 @@ enum ChinchillaCLI {
         case .help:
             print(helpText)
             return 0
+        case .gameStreamTest(let seconds):
+            return await GameStreamDiagnostics.run(seconds: seconds)
         case .mirrorTest(let host):
             guard !host.isEmpty else {
                 print("usage: Chinchilla mirror-test <tv-ip>")

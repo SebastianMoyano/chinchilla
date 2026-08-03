@@ -263,7 +263,10 @@ public actor GoogleCastSession {
                   let status = statuses.first else { return }
             mediaSessionID = status["mediaSessionId"] as? Int
             let time = status["currentTime"] as? Double ?? 0
-            let playerState = status["playerState"] as? String ?? ""
+            var playerState = status["playerState"] as? String ?? ""
+            if let idleReason = status["idleReason"] as? String {
+                playerState += " (idleReason: \(idleReason))"
+            }
             var duration: Double = 0
             if let media = status["media"] as? [String: Any] {
                 duration = media["duration"] as? Double ?? 0
@@ -305,10 +308,16 @@ public actor GoogleCastSession {
         let metadata = """
         {"metadataType":0,"title":\(jsonString(request.title))}
         """
+        // Cast receivers assume HLS carries MPEG-2 TS segments unless told
+        // otherwise. Ours are fMP4/CMAF — without these hints the receiver
+        // downloads every segment and renders a black screen.
+        let hlsHints = request.mime.contains("mpegurl")
+            ? ",\"hlsSegmentFormat\":\"FMP4\",\"hlsVideoSegmentFormat\":\"FMP4\""
+            : ""
         let payload = """
         {"type":"LOAD","requestId":\(nextRequestID()),"sessionId":"\(session)",\
         "media":{"contentId":\(jsonString(request.url)),"streamType":"\(request.live ? "LIVE" : "BUFFERED")",\
-        "contentType":"\(request.mime)","metadata":\(metadata)},"autoplay":true,"currentTime":0}
+        "contentType":"\(request.mime)","metadata":\(metadata)\(hlsHints)},"autoplay":true,"currentTime":0}
         """
         send(namespace: Self.namespaceMedia, to: transport, payload: payload)
     }
@@ -319,6 +328,23 @@ public actor GoogleCastSession {
         {"type":"\(type)","requestId":\(nextRequestID()),"mediaSessionId":\(media)\(extra)}
         """
         send(namespace: Self.namespaceMedia, to: transport, payload: payload)
+    }
+
+    /// Asks the receiver for a full status report (it only pushes on
+    /// changes, which hides "stuck buffering" states).
+    public func requestStatus() {
+        guard let transport = transportID else { return }
+        send(namespace: Self.namespaceMedia, to: transport,
+             payload: #"{"type":"GET_STATUS","requestId":\#(nextRequestID())}"#)
+    }
+
+    /// Nudges playback speed. A live stream that started a couple of
+    /// seconds behind never catches up at 1×; running slightly fast for a
+    /// few seconds walks the playhead to the live edge, then we go back.
+    public func setPlaybackRate(_ rate: Double) {
+        guard let transport = transportID else { return }
+        send(namespace: Self.namespaceMedia, to: transport,
+             payload: #"{"type":"SET_PLAYBACK_RATE","requestId":\#(nextRequestID()),"playbackRate":\#(rate)}"#)
     }
 
     public func play() { mediaCommand("PLAY") }

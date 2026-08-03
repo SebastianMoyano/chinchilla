@@ -2,6 +2,7 @@ import Foundation
 import Network
 import UniformTypeIdentifiers
 import DiskScanKit
+import Synchronization
 
 /// Minimal HTTP/1.1 file server (GET/HEAD) with Range support — just enough
 /// to feed a TV's media player. Files are exposed by opaque tokens, never
@@ -148,6 +149,39 @@ public final class CastHTTPServer: @unchecked Sendable {
             .first { $0.lowercased().hasPrefix("range:") }
             .map { String($0.dropFirst("range:".count)).trimmingCharacters(in: .whitespaces) }
 
+        if let streamHandler = streamRoutes[path] {
+            // No Content-Length: the body ends when we close the socket.
+            let header = self.header(
+                status: "200 OK", contentType: "video/mp4", contentLength: nil,
+                extraHeaders: ["Connection": "close", "Cache-Control": "no-store"]
+            )
+            connection.send(content: Data(header.utf8), completion: .contentProcessed { _ in })
+            if method == "HEAD" {
+                connection.cancel()
+                return
+            }
+            let alive = Mutex(true)
+            let writer = StreamWriter(
+                send: { data in
+                    guard alive.withLock({ $0 }) else { return false }
+                    connection.send(content: data, completion: .contentProcessed { error in
+                        if error != nil { alive.withLock { $0 = false } }
+                    })
+                    return true
+                },
+                close: {
+                    alive.withLock { $0 = false }
+                    connection.cancel()
+                }
+            )
+            connection.stateUpdateHandler = { state in
+                if case .cancelled = state { alive.withLock { $0 = false } }
+                if case .failed = state { alive.withLock { $0 = false } }
+            }
+            streamHandler(writer)
+            return  // connection is consumed by the stream
+        }
+
         if path.hasPrefix("/media/") {
             let token = String(path.dropFirst("/media/".count))
             guard let fileURL = files[token] as? URL else {
@@ -173,6 +207,27 @@ public final class CastHTTPServer: @unchecked Sendable {
         } else {
             sendSimple(connection, status: "404 Not Found")
             completion()
+        }
+    }
+
+    /// Streaming routes: the handler keeps writing until it returns false
+    /// (used for an endless progressive MP4 — no playlist, no polling).
+    private var streamRoutes: [String: @Sendable (StreamWriter) -> Void] = [:]
+
+    public struct StreamWriter: Sendable {
+        let send: @Sendable (Data) -> Bool
+        let close: @Sendable () -> Void
+        public func write(_ data: Data) -> Bool { send(data) }
+        public func finish() { close() }
+    }
+
+    public func setStreamRoute(_ path: String, handler: (@Sendable (StreamWriter) -> Void)?) {
+        queue.sync {
+            if let handler {
+                streamRoutes[path] = handler
+            } else {
+                streamRoutes.removeValue(forKey: path)
+            }
         }
     }
 
@@ -287,15 +342,17 @@ public final class CastHTTPServer: @unchecked Sendable {
     // MARK: - Response helpers
 
     private func header(
-        status: String, contentType: String, contentLength: Int64,
+        status: String, contentType: String, contentLength: Int64?,
         extraHeaders: [String: String] = [:]
     ) -> String {
         var lines = [
             "HTTP/1.1 \(status)",
             "Content-Type: \(contentType)",
-            "Content-Length: \(contentLength)",
-            "Connection: keep-alive",
         ]
+        if let contentLength {
+            lines.append("Content-Length: \(contentLength)")
+            lines.append("Connection: keep-alive")
+        }
         for (key, value) in extraHeaders {
             lines.append("\(key): \(value)")
         }

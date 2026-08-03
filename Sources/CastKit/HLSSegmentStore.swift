@@ -18,11 +18,29 @@ public final class HLSSegmentStore: @unchecked Sendable {
     }
 
     public func appendSegment(_ data: Data, duration: Double) {
-        lock.withLock {
+        let listeners: [@Sendable (Data) -> Void] = lock.withLock {
             segments.append((nextIndex, data, duration > 0 ? duration : 1))
             nextIndex += 1
             if segments.count > windowSize { segments.removeFirst() }
+            return Array(subscribers.values)
         }
+        // Progressive clients get every new fragment pushed to them.
+        for listener in listeners { listener(data) }
+    }
+
+    private var subscribers: [Int: @Sendable (Data) -> Void] = [:]
+    private var nextSubscriberID = 0
+
+    public func subscribe(_ handler: @escaping @Sendable (Data) -> Void) -> Int {
+        lock.withLock {
+            nextSubscriberID += 1
+            subscribers[nextSubscriberID] = handler
+            return nextSubscriberID
+        }
+    }
+
+    public func unsubscribe(_ id: Int) {
+        lock.withLock { subscribers.removeValue(forKey: id) }
     }
 
     public func initSegmentData() -> Data? {

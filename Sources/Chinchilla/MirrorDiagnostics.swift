@@ -5,23 +5,42 @@ import CastKit
 /// from the app bundle (which owns the Screen Recording grant) and prints
 /// what happens at every stage. Diagnostics only; not in the help text.
 enum MirrorDiagnostics {
+    /// TCC attributes permissions to the launching process, so running the
+    /// binary from a shell reports the terminal's rights, not the app's.
+    /// Launch it with `open -a Chinchilla --args mirror-test <ip>` and read
+    /// this report instead.
+    static let logURL = URL(fileURLWithPath: NSHomeDirectory())
+        .appendingPathComponent("Library/Logs/Chinchilla/mirror-test.log")
+
+    nonisolated(unsafe) private static var transcript = ""
+
+    static func log(_ line: String) {
+        print(line)
+        transcript += line + "\n"
+        try? FileManager.default.createDirectory(
+            at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        try? transcript.write(to: logURL, atomically: true, encoding: .utf8)
+    }
+
     static func run(host: String) async -> Int32 {
-        print("== Chinchilla mirror diagnostics ==")
-        print("Screen Recording granted: \(ScreenRecordingPermission.isGranted)")
+        transcript = ""
+        log("== Chinchilla mirror diagnostics ==")
+        log("Screen Recording granted: \(ScreenRecordingPermission.isGranted)")
         guard ScreenRecordingPermission.isGranted else {
-            print("→ Grant it in System Settings → Privacy → Screen Recording, then relaunch.")
+            log("→ Grant it in System Settings → Privacy → Screen Recording, then relaunch.")
             return 1
         }
 
         let streamer = ScreenStreamer()
         let server = CastHTTPServer()
         server.onRequest = { method, path in
-            print("  HTTP \(method) \(path)")
+            log("  HTTP \(method) \(path)")
         }
         do {
             try server.start()
         } catch {
-            print("HTTP server failed: \(error)")
+            log("HTTP server failed: \(error)")
             return 1
         }
         for _ in 0..<40 where server.port == 0 {
@@ -37,52 +56,102 @@ enum MirrorDiagnostics {
             return nil
         }
 
+        // Progressive fMP4: init segment, then every new fragment pushed
+        // down one long-lived response. No playlist, no polling, and the
+        // same container the TV already plays for files.
+        server.setStreamRoute("/mirror/live.mp4") { writer in
+            Task {
+                var attempts = 0
+                while store.initSegmentData() == nil, attempts < 100 {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    attempts += 1
+                }
+                guard let header = store.initSegmentData(), writer.write(header) else {
+                    writer.finish()
+                    return
+                }
+                let subscription = store.subscribe { fragment in
+                    _ = writer.write(fragment)
+                }
+                // Keep the response open while mirroring lasts.
+                while store.hasContent {
+                    try? await Task.sleep(for: .seconds(1))
+                }
+                store.unsubscribe(subscription)
+                writer.finish()
+            }
+        }
+
         do {
-            try await streamer.start(quality: .p720, includeAudio: false)
+            try await streamer.start(quality: .p720, includeAudio: true)
         } catch {
-            print("Capture failed: \(error)")
+            log("Capture failed: \(error)")
             return 1
         }
-        let ready = await streamer.waitForFirstSegment()
-        print("Segments ready: \(ready)")
-        print("Playlist:\n\(store.playlist())")
-        print("init segment bytes: \(store.initSegmentData()?.count ?? 0)")
-        print("segment 0 bytes: \(store.segmentData(index: 0)?.count ?? 0)")
+        let ready = await streamer.waitForFirstSegment(minimumSegments: 1)
+        log("Segments ready: \(ready)")
+        log("Playlist:\n\(store.playlist())")
+        log("init segment bytes: \(store.initSegmentData()?.count ?? 0)")
+        log("segment 0 bytes: \(store.segmentData(index: 0)?.count ?? 0)")
 
         guard let ip = CastHTTPServer.lanAddress(reachableFrom: host) else {
-            print("No LAN address")
+            log("No LAN address")
             return 1
         }
         let url = "http://\(ip):\(server.port)/mirror/stream.m3u8"
-        print("Serving: \(url)")
+        log("Serving: \(url)")
 
         let session = GoogleCastSession(device: GoogleCastDevice(name: "TV", host: host))
         let events = await session.events
         await session.connect()
+        var catchingUp = false
         let timeout = Task {
-            try? await Task.sleep(for: .seconds(40))
+            try? await Task.sleep(for: .seconds(45))
             await session.close()
         }
         for await event in events {
             switch event {
             case .state(let state):
-                print("Cast state: \(state)")
+                log("Cast state: \(state)")
                 if state == .ready {
                     try? await Task.sleep(for: .seconds(1))
-                    print("Sending LOAD…")
-                    await session.load(url: url, mime: "application/x-mpegurl",
+                    log("Sending LOAD…")
+                    let progressive = url.replacingOccurrences(
+                        of: "/mirror/stream.m3u8", with: "/mirror/live.mp4"
+                    )
+                    log("Trying progressive: \(progressive)")
+                    await session.load(url: progressive, mime: "video/mp4",
                                        title: "Mac screen", live: true)
+                    // Poll: receivers only push status on change, so a
+                    // silent stall looks identical to smooth playback.
+                    Task {
+                        for _ in 0..<20 {
+                            try? await Task.sleep(for: .seconds(2))
+                            await session.requestStatus()
+                        }
+                    }
                 }
                 if state == .closed { timeout.cancel() }
             case .media(let time, let duration, let playerState):
-                print("Cast media: state=\(playerState) time=\(time) duration=\(duration)")
+                let drift = duration - time
+                log(String(format: "Cast media: %@ drift=%.2fs", playerState, drift))
+                // Catch-up: run fast while behind, back to 1× near the edge.
+                if drift > 1.2, !catchingUp {
+                    catchingUp = true
+                    log("→ catching up at 1.15×")
+                    await session.setPlaybackRate(1.15)
+                } else if drift < 0.6, catchingUp {
+                    catchingUp = false
+                    log("→ back to 1×")
+                    await session.setPlaybackRate(1.0)
+                }
             case .error(let message):
-                print("Cast ERROR: \(message)")
+                log("Cast ERROR: \(message)")
             }
         }
         await streamer.stop()
         server.stopAll()
-        print("== done ==")
+        log("== done ==")
         return 0
     }
 }
