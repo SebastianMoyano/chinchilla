@@ -3,6 +3,7 @@ import Observation
 import AppKit
 import Network
 import UniformTypeIdentifiers
+import AVFoundation
 import CastKit
 
 /// One entry in the device list, regardless of protocol.
@@ -285,6 +286,13 @@ final class CastModel {
             let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "video/mp4"
             let mediaURL = "http://\(ip):\(server.port)\(path)"
             castingName = url.lastPathComponent
+            // Receivers don't always report duration (screen recordings
+            // often lack the metadata) — read it locally so the scrubber
+            // works from the first second either way.
+            if let localDuration = try? await AVURLAsset(url: url).load(.duration).seconds,
+               localDuration.isFinite, localDuration > 0 {
+                playbackDuration = localDuration
+            }
             awaitingFetch = true
             firewallHint = false
             playbackDuration = 0
