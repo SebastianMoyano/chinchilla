@@ -15,19 +15,37 @@ public struct HealthReport: Sendable {
 }
 
 public enum HealthCheck {
+    /// All external probes run CONCURRENTLY with short timeouts — the wall
+    /// time is the slowest single probe (~5 s worst case), never the sum.
+    /// The UI renders instantly and fills in; a slow probe costs one row.
     public static func run() async -> HealthReport {
         var report = HealthReport()
 
-        if let output = try? await ShellRunner.run(
-            "/usr/sbin/diskutil", ["info", "disk0"], timeout: .seconds(15)
-        ), let line = output.split(separator: "\n").first(where: { $0.contains("SMART Status") }) {
+        async let diskOutput = try? ShellRunner.run(
+            "/usr/sbin/diskutil", ["info", "disk0"], timeout: .seconds(5)
+        )
+        async let batteryOutput = try? ShellRunner.run(
+            "/usr/sbin/ioreg", ["-rn", "AppleSmartBattery"], timeout: .seconds(5)
+        )
+        async let profilesOutput = try? ShellRunner.runMerged(
+            "/usr/bin/profiles", ["status", "-type", "enrollment"], timeout: .seconds(5)
+        )
+
+        // Local, instant probes while the subprocesses run.
+        var boottime = timeval()
+        var size = MemoryLayout<timeval>.size
+        if sysctlbyname("kern.boottime", &boottime, &size, nil, 0) == 0 {
+            let up = Date().timeIntervalSince1970 - TimeInterval(boottime.tv_sec)
+            report.uptimeDays = max(0, Int(up / 86_400))
+        }
+        report.zombieCount = countZombies()
+
+        if let output = await diskOutput,
+           let line = output.split(separator: "\n").first(where: { $0.contains("SMART Status") }) {
             report.smartStatus = line.split(separator: ":").last?
                 .trimmingCharacters(in: .whitespaces)
         }
-
-        if let output = try? await ShellRunner.run(
-            "/usr/sbin/ioreg", ["-rn", "AppleSmartBattery"], timeout: .seconds(10)
-        ) {
+        if let output = await batteryOutput {
             func intField(_ name: String) -> Int? {
                 output.split(separator: "\n")
                     .first { $0.contains("\"\(name)\" =") }
@@ -38,19 +56,7 @@ public enum HealthCheck {
                 report.batteryHealthPercent = min(100, raw * 100 / design)
             }
         }
-
-        var boottime = timeval()
-        var size = MemoryLayout<timeval>.size
-        if sysctlbyname("kern.boottime", &boottime, &size, nil, 0) == 0 {
-            let up = Date().timeIntervalSince1970 - TimeInterval(boottime.tv_sec)
-            report.uptimeDays = max(0, Int(up / 86_400))
-        }
-
-        report.zombieCount = countZombies()
-
-        if let output = try? await ShellRunner.runMerged(
-            "/usr/bin/profiles", ["status", "-type", "enrollment"], timeout: .seconds(10)
-        ) {
+        if let output = await profilesOutput {
             report.isMDMManaged = output.contains("Yes")
         }
 
@@ -144,19 +150,36 @@ public enum BrewServices {
             .first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
+    /// brew loves to auto-update and hit its API on incidental commands —
+    /// on a slow network that read as a frozen Health screen. Both are
+    /// disabled here, with a short leash regardless.
+    static let quietEnv = [
+        "HOMEBREW_NO_AUTO_UPDATE": "1",
+        "HOMEBREW_NO_INSTALL_FROM_API_UNSUPPORTED": "1",
+        "HOMEBREW_NO_ANALYTICS": "1",
+    ]
+
     public static func list() async -> [BrewService] {
         guard let brew = brewPath,
-              let output = try? await ShellRunner.run(brew, ["services", "list"], timeout: .seconds(30))
+              let output = try? await ShellRunner.run(
+                brew, ["services", "list"], timeout: .seconds(10), environment: quietEnv
+              )
         else { return [] }
-        return output.split(separator: "\n").dropFirst().compactMap { line in
+        return output.split(separator: "\n").compactMap { line in
+            // Skip headers and brew's status chatter (e.g. "✔︎ JSON API …").
             let parts = line.split(separator: " ", omittingEmptySubsequences: true)
-            guard parts.count >= 2 else { return nil }
+            guard parts.count >= 2, !line.hasPrefix("Name"),
+                  ["started", "none", "error", "stopped", "scheduled"].contains(String(parts[1]))
+            else { return nil }
             return BrewService(name: String(parts[0]), status: String(parts[1]))
         }
     }
 
-    public static func stop(_ name: String) async {
+    public static func stopService(_ name: String) async {
         guard let brew = brewPath else { return }
-        _ = try? await ShellRunner.run(brew, ["services", "stop", name], timeout: .seconds(60))
+        _ = try? await ShellRunner.run(
+            brew, ["services", "stop", name], timeout: .seconds(60), environment: quietEnv
+        )
     }
+
 }

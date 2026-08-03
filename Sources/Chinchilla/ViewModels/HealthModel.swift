@@ -21,14 +21,19 @@ final class HealthModel {
     var brewServices: [BrewService] = []
     var brewBusy: Set<String> = []
 
+    /// Health and brew load as INDEPENDENT tasks: the screen renders
+    /// instantly and each block fills in when its data lands — a slow brew
+    /// can never hold the health rows hostage (or vice versa).
     func refresh() {
         guard !loading else { return }
         loading = true
+        snappyOn = SnappyUI.isApplied
         Task {
             report = await HealthCheck.run()
-            brewServices = await BrewServices.list()
-            snappyOn = SnappyUI.isApplied
             loading = false
+        }
+        Task {
+            brewServices = await BrewServices.list()
         }
     }
 
@@ -61,7 +66,7 @@ final class HealthModel {
         guard !brewBusy.contains(name) else { return }
         brewBusy.insert(name)
         Task {
-            await BrewServices.stop(name)
+            await BrewServices.stopService(name)
             brewServices = await BrewServices.list()
             brewBusy.remove(name)
         }

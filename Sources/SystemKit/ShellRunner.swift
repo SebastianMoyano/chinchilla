@@ -18,9 +18,10 @@ public enum ShellRunner {
     public static func run(
         _ tool: String,
         _ args: [String] = [],
-        timeout: Duration = .seconds(120)
+        timeout: Duration = .seconds(120),
+        environment: [String: String]? = nil
     ) async throws -> String {
-        try await launch(tool, args, timeout: timeout, mergeStderr: false)
+        try await launch(tool, args, timeout: timeout, mergeStderr: false, environment: environment)
     }
 
     /// Like `run`, but stderr is merged into the returned output — for tools
@@ -30,15 +31,20 @@ public enum ShellRunner {
         _ args: [String] = [],
         timeout: Duration = .seconds(120)
     ) async throws -> String {
-        try await launch(tool, args, timeout: timeout, mergeStderr: true)
+        try await launch(tool, args, timeout: timeout, mergeStderr: true, environment: nil)
     }
 
     private static func launch(
-        _ tool: String, _ args: [String], timeout: Duration, mergeStderr: Bool
+        _ tool: String, _ args: [String], timeout: Duration, mergeStderr: Bool,
+        environment: [String: String]?
     ) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
         process.arguments = args
+        if let environment {
+            process.environment = ProcessInfo.processInfo.environment
+                .merging(environment) { _, new in new }
+        }
         let outPipe = Pipe()
         // When merging, stderr shares outPipe; a separate unused Pipe would
         // never reach EOF and deadlock the drain.
