@@ -91,6 +91,11 @@ final class TabSaverModel {
                     memorySaverOn: BrowserTuner.isMemorySaverManaged($0)
                 )
             }
+        // Auto stays live even without the Everyday-mode watchdog: every
+        // Dashboard visit re-judges the machine. The lastApplied guard makes
+        // this a no-op unless the answer actually changed (no recursion:
+        // applyCurrentLevel → refresh → here → same level → stop).
+        reevaluateAutoIfNeeded()
     }
 
     /// One switch for all installed Chromium browsers ("simple form").
