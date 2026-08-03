@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Chinchilla Tab Guard",
+  "version": "0.6.0",
+  "description": "Per-tab smarts for Chinchilla: sleeps tabs you haven't used, cold-saves ancient ones, and calms Chrome down while you game. Honest and standalone-capable.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAweUkYy8wMrbKDW1gTXFTvhW/AZ/nFi4/k4k+aSZR2eojkOSHTts1ZWheolLLjTeUEnm++Imbd1M3xCkGbcXV2ALIruMj831xvU8oOk83rW/Aqyc3C0EnfwWDLtXRA/Hxvnr+27AOwpC6hqSr+km8NupLeL2y9V9Yee8dlHKcvhYfIuCAgP7+8Du3W6DrOdF2HJD5lwRZhHX1ftRXSdtRR/lOzuORfZRM0FJKoByQYkSc1HjH8P8n2FEM+l+QhvN6N3tMRTFq4CpZdrKOoOONj5nNMYA9mqD/9Qgtr0ct2xZlGUvltsPvkz7jf4jD8SmAqJY4vEYLuDAunYKNxuvGKwIDAQAB",
+  "permissions": ["tabs", "storage", "alarms", "nativeMessaging", "scripting"],
+  "optional_host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "sw.js", "type": "module" },
+  "options_page": "options.html",
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+}

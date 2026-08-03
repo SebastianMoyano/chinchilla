@@ -9,6 +9,13 @@ import SystemKit
 @main
 struct Main {
     static func main() async {
+        // Chrome spawns us as a native-messaging host with the extension
+        // origin as argv[1] — this MUST run before the CLI/GUI dispatch or
+        // every browser connection would boot a full GUI instance.
+        if CommandLine.arguments.dropFirst().contains(where: { $0.hasPrefix("chrome-extension://") })
+            || CommandLine.arguments.contains("--native-host") {
+            exit(await TabGuardHost.run())
+        }
         if let command = ChinchillaCLI.command(from: CommandLine.arguments) {
             let code = await ChinchillaCLI.run(command)
             exit(code)

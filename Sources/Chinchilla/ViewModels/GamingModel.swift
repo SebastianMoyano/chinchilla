@@ -10,8 +10,17 @@ struct QuitCandidate: Identifiable {
     let bundleURL: URL?
     let isSuggested: Bool
     let warning: LocalizedStringKey?
+    /// Only curated background apps may be frozen — browsers/media/chat
+    /// reconnect badly or beachball; closing is more honest for those.
+    let canPause: Bool
 
     var id: pid_t { pid }
+}
+
+enum GamingAppAction: String, CaseIterable {
+    case keep
+    case pause
+    case close
 }
 
 @MainActor
@@ -19,7 +28,9 @@ struct QuitCandidate: Identifiable {
 final class GamingModel {
     var isActive = false
     var candidates: [QuitCandidate] = []
-    var selectedPIDs: Set<pid_t> = []
+    /// Per-row decision, seeded from remembered per-bundleID preferences.
+    var rowActions: [pid_t: GamingAppAction] = [:]
+    var pendingConfirmation = false
     var overlayVisible = false
 
     // Rolling 60-sample history for sparklines.
@@ -56,12 +67,25 @@ final class GamingModel {
         "com.spotify.client": nil,
     ]
 
+    /// Background/sync apps that freeze cleanly. Browsers, media players,
+    /// chat apps and Docker are deliberately excluded.
+    private static let pausable: Set<String> = [
+        "com.getdropbox.dropbox", "com.google.drivefs", "com.microsoft.OneDrive",
+        "com.adobe.acc.AdobeCreativeCloud", "com.apple.Photos",
+    ]
+
     private static let relaunchDefaultsKey = "gaming.terminatedApps"
+    private static let pausedDefaultsKey = "gaming.pausedApps"
+    private static let actionPrefsKey = "gaming.actionPrefs"
+    static let skipConfirmKey = "gaming.skipConfirm"
+    static let focusShortcutOnKey = "gaming.focusShortcutOn"
+    static let focusShortcutOffKey = "gaming.focusShortcutOff"
 
     // MARK: Candidates
 
     func refreshCandidates() {
         let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let prefs = UserDefaults.standard.dictionary(forKey: Self.actionPrefsKey) as? [String: String] ?? [:]
         candidates = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }
             .filter { $0.processIdentifier != frontmost }
@@ -75,23 +99,81 @@ final class GamingModel {
                     name: app.localizedName ?? bundleID,
                     bundleURL: app.bundleURL,
                     isSuggested: suggestion != nil,
-                    warning: suggestion ?? nil
+                    warning: suggestion ?? nil,
+                    canPause: Self.pausable.contains(bundleID)
                 )
             }
             .sorted { ($0.isSuggested ? 0 : 1, $0.name) < ($1.isSuggested ? 0 : 1, $1.name) }
-        selectedPIDs = Set(candidates.filter(\.isSuggested).map(\.pid))
+        // Seed row actions: remembered preference > suggested-close > keep.
+        rowActions = Dictionary(uniqueKeysWithValues: candidates.map { candidate in
+            let remembered = prefs[candidate.bundleID].flatMap(GamingAppAction.init(rawValue:))
+            let action = remembered ?? (candidate.isSuggested ? .close : .keep)
+            // A remembered "pause" for an app no longer pausable degrades to close.
+            let valid = (action == .pause && !candidate.canPause) ? GamingAppAction.close : action
+            return (candidate.pid, valid)
+        })
     }
+
+    func setAction(_ action: GamingAppAction, for candidate: QuitCandidate) {
+        rowActions[candidate.pid] = action
+        var prefs = UserDefaults.standard.dictionary(forKey: Self.actionPrefsKey) as? [String: String] ?? [:]
+        prefs[candidate.bundleID] = action.rawValue
+        UserDefaults.standard.set(prefs, forKey: Self.actionPrefsKey)
+    }
+
+    var closingCandidates: [QuitCandidate] { candidates.filter { rowActions[$0.pid] == .close } }
+    var pausingCandidates: [QuitCandidate] { candidates.filter { rowActions[$0.pid] == .pause } }
 
     // MARK: Activation
 
+    /// Entry point from the toggle: confirm first unless the user opted out
+    /// or nothing disruptive would happen.
+    func requestActivate() {
+        refreshConflictFreeCandidates()
+        let disruptive = !closingCandidates.isEmpty || !pausingCandidates.isEmpty
+        if UserDefaults.standard.bool(forKey: Self.skipConfirmKey) || !disruptive {
+            activate()
+        } else {
+            pendingConfirmation = true
+        }
+    }
+
+    /// Candidates may be stale (apps quit since the list was built).
+    private func refreshConflictFreeCandidates() {
+        if candidates.isEmpty { refreshCandidates() }
+    }
+
     func activate() {
         guard !isActive else { return }
+        pendingConfirmation = false
         isActive = true
         sleepAssertion.activate()
 
-        // Quit selected apps gracefully; remember them for relaunch.
+        // 1. Pause the freeze-safe ones — persist BEFORE the first SIGSTOP
+        //    so a crash can always resume them.
+        var pausedList: [PausedProcess] = []
+        for candidate in pausingCandidates {
+            guard let start = ProcessPauser.startTime(of: candidate.pid) else { continue }
+            pausedList.append(PausedProcess(
+                pid: candidate.pid, startTime: start,
+                bundleID: candidate.bundleID, name: candidate.name
+            ))
+        }
+        persistPaused(pausedList)
+        var actuallyPaused: [PausedProcess] = []
+        for candidate in pausingCandidates {
+            if let paused = ProcessPauser.pauseTree(
+                pid: candidate.pid, bundleID: candidate.bundleID, name: candidate.name
+            ) {
+                actuallyPaused.append(paused)
+            }
+        }
+        persistPaused(actuallyPaused)
+
+        // 2. Quit the rest gracefully; remember them for relaunch.
+        let closingPIDs = Set(closingCandidates.map(\.pid))
         let toQuit = NSWorkspace.shared.runningApplications.filter {
-            selectedPIDs.contains($0.processIdentifier)
+            closingPIDs.contains($0.processIdentifier)
         }
         var terminatedPaths = UserDefaults.standard.stringArray(forKey: Self.relaunchDefaultsKey) ?? []
         for app in toQuit {
@@ -102,7 +184,16 @@ final class GamingModel {
         }
         UserDefaults.standard.set(terminatedPaths, forKey: Self.relaunchDefaultsKey)
 
-        // Stop TM backups now and every 10 minutes while active.
+        // 3. Tell Tab Guard (all connected browser profiles): sleep background
+        //    tabs, pause background media. No-op when not installed.
+        TabGuardModel.setGaming(active: true, pauseVideos: true)
+
+        // 4. User's Focus/DND shortcut, if configured.
+        if let shortcut = UserDefaults.standard.string(forKey: Self.focusShortcutOnKey), !shortcut.isEmpty {
+            Task { await ShortcutsRunner.run(shortcut) }
+        }
+
+        // 5. Stop TM backups now and every 10 minutes while active.
         backupStopTask = Task {
             while !Task.isCancelled {
                 await TimeMachine.stopBackup()
@@ -118,7 +209,47 @@ final class GamingModel {
         sleepAssertion.release()
         backupStopTask?.cancel()
         backupStopTask = nil
+        resumePaused()
+        TabGuardModel.setGaming(active: false, pauseVideos: false)
+        if let shortcut = UserDefaults.standard.string(forKey: Self.focusShortcutOffKey), !shortcut.isEmpty {
+            Task { await ShortcutsRunner.run(shortcut) }
+        }
         hideOverlay()
+    }
+
+    // MARK: Pause bookkeeping (crash-safe)
+
+    private func persistPaused(_ list: [PausedProcess]) {
+        if let data = try? JSONEncoder().encode(list) {
+            UserDefaults.standard.set(data, forKey: Self.pausedDefaultsKey)
+        }
+    }
+
+    private var persistedPaused: [PausedProcess] {
+        guard let data = UserDefaults.standard.data(forKey: Self.pausedDefaultsKey) else { return [] }
+        return (try? JSONDecoder().decode([PausedProcess].self, from: data)) ?? []
+    }
+
+    private func resumePaused() {
+        for paused in persistedPaused {
+            ProcessPauser.resumeTree(paused)
+        }
+        UserDefaults.standard.removeObject(forKey: Self.pausedDefaultsKey)
+    }
+
+    /// Called at app launch: SIGCONT verified leftovers from a crashed
+    /// session (never leaves apps frozen), and clear a stale gaming flag
+    /// in the Tab Guard mailbox.
+    func resumeOrphanedPauses() {
+        let orphans = persistedPaused
+        guard !orphans.isEmpty || !isActive else { return }
+        for paused in orphans {
+            ProcessPauser.resumeTree(paused)
+        }
+        UserDefaults.standard.removeObject(forKey: Self.pausedDefaultsKey)
+        if !isActive {
+            TabGuardModel.setGaming(active: false, pauseVideos: false)
+        }
     }
 
     var terminatedAppPaths: [String] {

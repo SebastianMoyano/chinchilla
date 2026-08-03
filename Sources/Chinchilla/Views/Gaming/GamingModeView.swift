@@ -52,7 +52,7 @@ struct GamingModeView: View {
             .help("Floating performance panel that stays above your game.")
             Toggle("", isOn: Binding(
                 get: { model.isActive },
-                set: { on in on ? model.activate() : model.deactivate() }
+                set: { on in on ? model.requestActivate() : model.deactivate() }
             ))
             .toggleStyle(.switch)
             .controlSize(.large)
@@ -61,6 +61,12 @@ struct GamingModeView: View {
         }
         .padding(18)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .sheet(isPresented: Binding(
+            get: { model.pendingConfirmation },
+            set: { model.pendingConfirmation = $0 }
+        )) {
+            GamingConfirmSheet(model: model)
+        }
     }
 
     private func statsCard(_ model: GamingModel) -> some View {
@@ -175,18 +181,6 @@ struct GamingModeView: View {
             }
             ForEach(model.candidates) { candidate in
                 HStack(spacing: 8) {
-                    Toggle(isOn: Binding(
-                        get: { model.selectedPIDs.contains(candidate.pid) },
-                        set: { on in
-                            if on {
-                                model.selectedPIDs.insert(candidate.pid)
-                            } else {
-                                model.selectedPIDs.remove(candidate.pid)
-                            }
-                        }
-                    )) { EmptyView() }
-                    .toggleStyle(.checkbox)
-                    .labelsHidden()
                     Text(verbatim: candidate.name)
                     if let warning = candidate.warning {
                         Label(warning, systemImage: "exclamationmark.triangle.fill")
@@ -194,11 +188,69 @@ struct GamingModeView: View {
                             .foregroundStyle(.orange)
                     }
                     Spacer()
+                    Picker("", selection: Binding(
+                        get: { model.rowActions[candidate.pid] ?? .keep },
+                        set: { model.setAction($0, for: candidate) }
+                    )) {
+                        Text("Keep").tag(GamingAppAction.keep)
+                        if candidate.canPause {
+                            Text("Pause").tag(GamingAppAction.pause)
+                        }
+                        Text("Close").tag(GamingAppAction.close)
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    .labelsHidden()
+                    .help(candidate.canPause
+                        ? "Pause freezes it in place and resumes it instantly when you're done. If you click a paused app it will look stuck — that's the freeze."
+                        : "Pause isn't offered for browsers, media or chat apps — they don't freeze cleanly. Closing is honest; it can save first.")
                 }
             }
+            Text("Your choices are remembered per app for next time.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            focusShortcutRow(model)
         }
         .padding(18)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    @State private var availableShortcuts: [String] = []
+
+    private func focusShortcutRow(_ model: GamingModel) -> some View {
+        HStack(spacing: 8) {
+            Label("Focus shortcut", systemImage: "moon.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .help("macOS gives apps no direct Do Not Disturb switch. Create a Shortcut with the \"Set Focus\" action and pick it here — Chinchilla runs it when gaming starts/ends.")
+            Picker("", selection: Binding(
+                get: { UserDefaults.standard.string(forKey: GamingModel.focusShortcutOnKey) ?? "" },
+                set: { UserDefaults.standard.set($0, forKey: GamingModel.focusShortcutOnKey) }
+            )) {
+                Text("None").tag("")
+                ForEach(availableShortcuts, id: \.self) { Text(verbatim: $0).tag($0) }
+            }
+            .fixedSize()
+            .labelsHidden()
+            Text("on start ·")
+                .font(.caption2).foregroundStyle(.tertiary)
+            Picker("", selection: Binding(
+                get: { UserDefaults.standard.string(forKey: GamingModel.focusShortcutOffKey) ?? "" },
+                set: { UserDefaults.standard.set($0, forKey: GamingModel.focusShortcutOffKey) }
+            )) {
+                Text("None").tag("")
+                ForEach(availableShortcuts, id: \.self) { Text(verbatim: $0).tag($0) }
+            }
+            .fixedSize()
+            .labelsHidden()
+            Text("on end")
+                .font(.caption2).foregroundStyle(.tertiary)
+            Spacer()
+        }
+        .task {
+            availableShortcuts = await ShortcutsRunner.list()
+        }
     }
 
     private func relaunchCard(_ model: GamingModel) -> some View {
@@ -218,7 +270,7 @@ struct GamingModeView: View {
         VStack(alignment: .leading, spacing: 6) {
             Label("What we don't do (on purpose)", systemImage: "hand.raised")
                 .font(.headline)
-            Text("• No RAM \"purge\": it empties disk caches and makes things slower — macOS already manages memory well.\n• No Spotlight toggling: turning it off needs admin rights and stays off if anything crashes.\n• No FPS counter: macOS doesn't expose other apps' frame rates; anyone showing one is guessing.\n• macOS Sequoia's own Game Mode kicks in automatically when a game goes fullscreen — Chinchilla complements it instead of fighting it.")
+            Text("• No RAM \"purge\": it empties disk caches and makes things slower — macOS already manages memory well.\n• No Spotlight toggling: turning it off needs admin rights and stays off if anything crashes.\n• No FPS counter: macOS doesn't expose other apps' frame rates; anyone showing one is guessing.\n• No per-app bandwidth throttling: it needs root firewall rules that outlive crashes. Sleeping browser tabs and pausing background videos (Tab Guard) cuts the real traffic instead.\n• No YouTube quality forcing: it relies on private player internals that break without notice.\n• Focus/Do Not Disturb only via a Shortcut you create — Apple gives apps no direct switch.\n• macOS Sequoia's own Game Mode kicks in automatically when a game goes fullscreen — Chinchilla complements it instead of fighting it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

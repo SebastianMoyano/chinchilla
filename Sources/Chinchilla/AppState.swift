@@ -68,10 +68,13 @@ final class AppState {
     let snapshots = SnapshotModel()
     let memory = MemoryModel()
     let dailyBoost = DailyBoostModel()
+    let tabGuard = TabGuardModel()
 
     init() {
         dailyBoost.appState = self
         dailyBoost.startIfEnabled()
+        // Never leave apps frozen by a crashed gaming session.
+        gaming.resumeOrphanedPauses()
     }
 
     // MARK: Smart Scan — one click, three sweeps, one number.

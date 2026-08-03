@@ -330,6 +330,11 @@ struct TabSaverCard: View {
                     }
                 }
             }
+
+            Divider()
+
+            // 3 — Tab Guard: per-tab smarts via the companion extension
+            TabGuardSection()
         }
         .padding(16)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))

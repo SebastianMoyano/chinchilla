@@ -15,5 +15,6 @@ let package = Package(
         .target(name: "SystemKit"),
         .testTarget(name: "CleanCoreTests", dependencies: ["CleanCore"]),
         .testTarget(name: "DiskScanKitTests", dependencies: ["DiskScanKit"]),
+        .testTarget(name: "SystemKitTests", dependencies: ["SystemKit"]),
     ]
 )

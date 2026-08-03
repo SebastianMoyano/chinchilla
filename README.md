@@ -56,6 +56,10 @@ Sin FDA, Safari, la Papelera y otras rutas protegidas no se pueden medir ni limp
 - Por defecto se borra a la Papelera; solo los caches `safe` se eliminan directo.
 - Todo queda registrado en `~/Library/Logs/Chinchilla/clean-history.jsonl`.
 
+## Tab Guard (extensión de Chrome opcional)
+
+En `extension/tabguard/` vive una extensión MV3 (JS puro, sin build) que agrega inteligencia **por pestaña**: duerme pestañas según tu inactividad real, hace *cold save* de las que llevan días sin tocar (guardadas y restaurables, nunca perdidas), y cuando activas el modo gaming duerme todas las pestañas de fondo y pausa sus videos. Habla con la app por Native Messaging (framing de 32 bits, host = el propio binario detectando `chrome-extension://` en argv). El manifest del conector es por usuario (cubre todos los perfiles); la extensión se carga una vez por perfil — la app te guía (Dashboard → Tab Saver → paso 3). Multi-perfil: las estadísticas agregan todas las conexiones activas.
+
 ## CLI
 
 El mismo binario funciona como herramienta de línea de comandos, con la misma SafetyPolicy, guarda de apps abiertas y registro de auditoría que la GUI:

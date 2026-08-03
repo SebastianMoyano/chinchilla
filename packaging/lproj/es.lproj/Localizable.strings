@@ -111,7 +111,42 @@
 "Forget" = "Olvidar";
 "Relaunch All" = "Relanzar todas";
 "What we don't do (on purpose)" = "Lo que NO hacemos (a propósito)";
-"• No RAM \"purge\": it empties disk caches and makes things slower — macOS already manages memory well.\n• No Spotlight toggling: turning it off needs admin rights and stays off if anything crashes.\n• No FPS counter: macOS doesn't expose other apps' frame rates; anyone showing one is guessing.\n• macOS Sequoia's own Game Mode kicks in automatically when a game goes fullscreen — Chinchilla complements it instead of fighting it." = "• Sin \"purge\" de RAM: vacía los caches de disco y hace todo más lento — macOS ya gestiona bien la memoria.\n• Sin apagar Spotlight: requiere permisos de admin y queda apagado si algo falla.\n• Sin contador de FPS: macOS no expone los frames de otras apps; quien muestra uno, lo inventa.\n• El Game Mode de macOS Sequoia se activa solo cuando un juego entra a pantalla completa — Chinchilla lo complementa, no compite con él.";
+"• No RAM \"purge\": it empties disk caches and makes things slower — macOS already manages memory well.\n• No Spotlight toggling: turning it off needs admin rights and stays off if anything crashes.\n• No FPS counter: macOS doesn't expose other apps' frame rates; anyone showing one is guessing.\n• No per-app bandwidth throttling: it needs root firewall rules that outlive crashes. Sleeping browser tabs and pausing background videos (Tab Guard) cuts the real traffic instead.\n• No YouTube quality forcing: it relies on private player internals that break without notice.\n• Focus/Do Not Disturb only via a Shortcut you create — Apple gives apps no direct switch.\n• macOS Sequoia's own Game Mode kicks in automatically when a game goes fullscreen — Chinchilla complements it instead of fighting it." = "• Sin \"purge\" de RAM: vacía los caches de disco y hace todo más lento — macOS ya gestiona bien la memoria.\n• Sin apagar Spotlight: requiere permisos de admin y queda apagado si algo falla.\n• Sin contador de FPS: macOS no expone los frames de otras apps; quien muestra uno, lo inventa.\n• Sin limitar el internet por app: requiere reglas de firewall con root que sobreviven a los crashes. Dormir pestañas y pausar videos de fondo (Tab Guard) corta el tráfico real.\n• Sin forzar la calidad de YouTube: depende de APIs privadas del player que se rompen sin aviso.\n• Foco/No molestar solo vía un Atajo creado por ti — Apple no da interruptor directo a las apps.\n• El Game Mode de macOS Sequoia se activa solo cuando un juego entra a pantalla completa — Chinchilla lo complementa, no compite con él.";
+
+/* Gaming v2 + Tab Guard (0.6.0) */
+"Ready to game?" = "¿Listo para jugar?";
+"These apps will quit (gracefully — they can ask to save):" = "Estas apps se cerrarán (de forma normal — pueden pedir guardar):";
+"These will freeze in place and resume when you're done:" = "Estas se congelarán y volverán cuando termines:";
+"Background browser tabs will sleep and background videos pause (Tab Guard)." = "Las pestañas de fondo dormirán y los videos de fondo se pausarán (Tab Guard).";
+"Mac stays awake · Time Machine backups pause · everything reverts when you turn gaming mode off." = "El Mac queda despierto · los respaldos de Time Machine se pausan · todo se revierte al apagar el modo gaming.";
+"Don't ask again — just do this next time" = "No preguntar de nuevo — hazlo directo la próxima";
+"Activate" = "Activar";
+"Keep" = "Dejar";
+"Pause" = "Pausar";
+"Your choices are remembered per app for next time." = "Tus elecciones se recuerdan por app para la próxima.";
+"Focus shortcut" = "Atajo de Foco";
+"on start ·" = "al iniciar ·";
+"on end" = "al terminar";
+"None" = "Ninguno";
+"Pause freezes it in place and resumes it instantly when you're done. If you click a paused app it will look stuck — that's the freeze." = "Pausar la congela en el acto y la reanuda al instante cuando termines. Si haces clic en una app pausada se verá pegada — es el congelamiento.";
+"Pause isn't offered for browsers, media or chat apps — they don't freeze cleanly. Closing is honest; it can save first." = "Pausar no se ofrece para navegadores, apps de media o chat — no se congelan bien. Cerrar es honesto; pueden guardar antes.";
+"Per-tab smarts (Tab Guard)" = "Inteligencia por pestaña (Tab Guard)";
+"%lld profile(s)" = "%lld perfil(es)";
+"Finish setup…" = "Terminar configuración…";
+"Set up…" = "Configurar…";
+"Open cold-saved list" = "Abrir lista de guardadas";
+"A small optional Chrome extension that sleeps each tab based on when YOU last used it, and saves+closes tabs untouched for days (restorable anytime)." = "Una pequeña extensión opcional de Chrome que duerme cada pestaña según cuándo TÚ la usaste por última vez, y guarda+cierra las que llevan días sin tocar (restaurables cuando quieras).";
+"Set up Tab Guard" = "Configurar Tab Guard";
+"Install the connector" = "Instala el conector";
+"Lets the extension talk to Chinchilla. One click, no admin needed." = "Permite que la extensión hable con Chinchilla. Un clic, sin admin.";
+"Install connector" = "Instalar conector";
+"Load the extension in Chrome" = "Carga la extensión en Chrome";
+"Open chrome://extensions, turn on \"Developer mode\" (top right), click \"Load unpacked\" and pick the folder below. Repeat in each Chrome profile you use — extensions are per-profile." = "Abre chrome://extensions, activa \"Modo de desarrollador\" (arriba a la derecha), haz clic en \"Cargar descomprimida\" y elige la carpeta de abajo. Repítelo en cada perfil de Chrome que uses — las extensiones son por perfil.";
+"Copy path" = "Copiar ruta";
+"Show in Finder" = "Mostrar en Finder";
+"Connected — you're done!" = "Conectado — ¡listo!";
+"Waiting for the extension…" = "Esperando a la extensión…";
+"Run the installed app (e.g. /Applications/Chinchilla.app) to connect the extension." = "Ejecuta la app instalada (p. ej. /Applications/Chinchilla.app) para conectar la extensión.";
 
 /* Uninstaller */
 "Uninstaller" = "Desinstalador";

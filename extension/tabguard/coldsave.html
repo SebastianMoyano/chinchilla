@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Cold-saved tabs — Chinchilla Tab Guard</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: -apple-system, system-ui; max-width: 720px; margin: 40px auto; padding: 0 20px; }
+    h1 { font-size: 22px; } h1 .mouse { font-size: 26px; }
+    .sub { color: gray; margin-bottom: 20px; }
+    .day { font-weight: 600; margin: 18px 0 6px; }
+    .item { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; }
+    .item:hover { background: rgba(128,128,128,.12); }
+    .item img { width: 16px; height: 16px; }
+    .item a { flex: 1; text-decoration: none; color: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item small { color: gray; }
+    button { border: 1px solid rgba(128,128,128,.4); background: transparent; border-radius: 6px; padding: 3px 10px; cursor: pointer; color: inherit; }
+    button:hover { background: rgba(128,128,128,.15); }
+    .toolbar { display: flex; gap: 10px; margin-bottom: 10px; }
+    #empty { color: gray; text-align: center; margin-top: 60px; }
+  </style>
+</head>
+<body>
+  <h1><span class="mouse">🐭</span> Cold-saved tabs</h1>
+  <p class="sub">Tabs you hadn't touched in a long time, saved here and closed. Click to bring one back — nothing is ever lost.</p>
+  <div class="toolbar">
+    <button id="restoreAll">Restore all</button>
+    <button id="clearAll">Forget all</button>
+  </div>
+  <div id="list"></div>
+  <p id="empty" hidden>Nothing cold-saved yet. Tabs land here after <span id="days"></span> days without use (if enabled in options).</p>
+  <script src="coldsave.js" type="module"></script>
+</body>
+</html>
