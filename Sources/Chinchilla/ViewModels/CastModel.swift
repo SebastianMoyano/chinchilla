@@ -89,6 +89,9 @@ final class CastModel {
     /// Set when the fast path wasn't available and we fell back.
     var mirrorUsingFallback = false
     private var fastMirror: CastMirrorSession?
+    /// Bumped whenever mirroring is asked to stop, so a start that's still in
+    /// flight can tell it was cancelled and tear itself down.
+    private var mirrorGeneration = 0
 
     /// Only Chromecast and FCast play HLS; DLNA renderers generally don't.
     var canMirrorToConnectedDevice: Bool {
@@ -122,6 +125,8 @@ final class CastModel {
         mirrorStarting = true
         mirrorError = nil
         mirrorUsingFallback = false
+        mirrorGeneration += 1
+        let generation = mirrorGeneration
         Task {
             defer { mirrorStarting = false }
 
@@ -129,7 +134,8 @@ final class CastModel {
             // rather than failing — some Cast devices only speak the slow one.
             if case .googlecast(let device) = target.kind, mirrorFastPath {
                 let fast = CastMirrorSession(
-                    host: device.host, quality: mirrorQuality, playoutDelayMs: mirrorDelayMs
+                    host: device.host, quality: mirrorQuality,
+                    includeAudio: mirrorAudio, playoutDelayMs: mirrorDelayMs
                 )
                 fast.onStopped = { message in
                     Task { @MainActor [weak self] in
@@ -139,12 +145,19 @@ final class CastModel {
                 }
                 do {
                     try await fast.start()
+                    // The user may have hit stop (or disconnected) while the
+                    // handshake was in flight.
+                    guard mirrorGeneration == generation else {
+                        await fast.stop()
+                        return
+                    }
                     fastMirror = fast
                     castingName = String(localized: "Your screen")
                     mirroring = true
                     playbackState = 1
                     return
                 } catch {
+                    guard mirrorGeneration == generation else { return }
                     mirrorUsingFallback = true
                 }
             }
@@ -215,6 +228,10 @@ final class CastModel {
                     mirrorError = String(localized: "The screen encoder didn't produce video. Try again.")
                     return
                 }
+                guard mirrorGeneration == generation else {
+                    await streamer.stop()
+                    return
+                }
                 let base = "http://\(ip):\(server.port)/mirror"
                 castingName = String(localized: "Your screen")
                 mirroring = true
@@ -242,6 +259,7 @@ final class CastModel {
 
     func stopMirroring() {
         guard mirroring || mirrorStarting else { return }
+        mirrorGeneration += 1
         mirroring = false
         castingName = nil
         playbackState = 0
@@ -390,6 +408,9 @@ final class CastModel {
     }
 
     func disconnect() {
+        // Mirroring holds its own capture and, on the fast path, its own
+        // connection to the TV — dropping this session doesn't reach it.
+        if mirroring || mirrorStarting { stopMirroring() }
         let old = session
         let oldCast = castSession
         Task { await old?.close() }

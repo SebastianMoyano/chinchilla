@@ -28,11 +28,18 @@ public final class CastMirrorSession: @unchecked Sendable {
     public let host: String
     public let quality: MirrorQuality
     public let frameRate: Int
+    public let includeAudio: Bool
     public private(set) var playoutDelayMs: Int
+    /// False when the receiver took video but turned audio down, so the UI
+    /// can say so instead of leaving the user wondering.
+    public private(set) var audioAccepted = false
 
     private var session: GoogleCastSession?
+    private var transport: CastStreamTransport?
     private var sender: CastStreamSender?
     private var encoder: RealtimeH264Encoder?
+    private var audioSender: CastStreamSender?
+    private var audioEncoder: OpusAudioEncoder?
     private var streamer: ScreenStreamer?
 
     /// Called when the stream dies on its own.
@@ -41,11 +48,13 @@ public final class CastMirrorSession: @unchecked Sendable {
 
     public init(
         host: String, quality: MirrorQuality = .p720,
-        frameRate: Int = 30, playoutDelayMs: Int = CastStreaming.defaultTargetDelayMs
+        frameRate: Int = 30, includeAudio: Bool = true,
+        playoutDelayMs: Int = CastStreaming.defaultTargetDelayMs
     ) {
         self.host = host
         self.quality = quality
         self.frameRate = frameRate
+        self.includeAudio = includeAudio
         self.playoutDelayMs = playoutDelayMs
     }
 
@@ -61,7 +70,7 @@ public final class CastMirrorSession: @unchecked Sendable {
         offer.height = size.height
         offer.frameRate = frameRate
         offer.videoBitRate = quality.bitrate
-        offer.includeAudio = false
+        offer.includeAudio = includeAudio
         offer.targetDelayMs = playoutDelayMs
         let sealed = offer
 
@@ -104,14 +113,24 @@ public final class CastMirrorSession: @unchecked Sendable {
             await stop()
             throw Failure.receiverDeclined
         }
-        onLog?("Cast Streaming: udpPort=\(answer.udpPort), delay=\(playoutDelayMs) ms")
+        audioAccepted = answer.acceptedAudio
+        onLog?("Cast Streaming: udpPort=\(answer.udpPort), delay=\(playoutDelayMs) ms, " +
+               "audio=\(audioAccepted)")
+
+        guard let transport = CastStreamTransport(host: host, port: answer.udpPort) else {
+            await stop()
+            throw Failure.noAnswer
+        }
+        transport.onLog = onLog
+        transport.start()
+        self.transport = transport
 
         let encoder = try RealtimeH264Encoder(
             width: size.width, height: size.height,
             bitrate: sealed.videoBitRate, frameRate: frameRate
         )
         let sender = CastStreamSender(
-            host: host, port: answer.udpPort, keys: sealed.videoKeys,
+            transport: transport, keys: sealed.videoKeys,
             ssrc: sealed.videoSSRC, payloadType: 101,
             initialPlayoutDelayMs: playoutDelayMs
         )
@@ -120,10 +139,35 @@ public final class CastMirrorSession: @unchecked Sendable {
         sender.start()
         encoder.onSample = { [weak sender] sample in sender?.send(sample) }
 
+        // Audio rides a second RTP stream: its own SSRC, its own keys, and a
+        // 48 kHz timebase instead of video's 90 kHz.
+        if audioAccepted {
+            let audioEncoder = OpusAudioEncoder(bitrate: 128_000)
+            let audioSender = CastStreamSender(
+                transport: transport, keys: sealed.audioKeys,
+                ssrc: sealed.audioSSRC, payloadType: 96, timebase: 48_000,
+                initialPlayoutDelayMs: playoutDelayMs
+            )
+            audioSender.onLog = onLog
+            audioSender.start()
+            audioEncoder.onPacket = { [weak audioSender] packet in
+                audioSender?.sendAudio(packet)
+            }
+            self.audioEncoder = audioEncoder
+            self.audioSender = audioSender
+        }
+
         let streamer = ScreenStreamer()
         streamer.onVideoSample = { [weak encoder] buffer in encoder?.encode(buffer) }
+        if audioAccepted {
+            streamer.onAudioSample = { [weak self] buffer in
+                self?.audioEncoder?.encode(buffer)
+            }
+        }
         streamer.onStopped = { [weak self] message in self?.onStopped?(message) }
-        try await streamer.start(quality: quality, includeAudio: false, frameRate: frameRate)
+        try await streamer.start(
+            quality: quality, includeAudio: audioAccepted, frameRate: frameRate
+        )
 
         self.encoder = encoder
         self.sender = sender
@@ -138,14 +182,20 @@ public final class CastMirrorSession: @unchecked Sendable {
     }
 
     public func stats() -> CastStreamSender.Stats? { sender?.currentStats() }
+    public func audioStats() -> CastStreamSender.Stats? { audioSender?.currentStats() }
 
     public func stop() async {
         await streamer?.stop()
         streamer = nil
         encoder?.finish()
         encoder = nil
+        audioEncoder = nil
         sender?.stop()
         sender = nil
+        audioSender?.stop()
+        audioSender = nil
+        transport?.stop()
+        transport = nil
         await session?.close()
         session = nil
     }

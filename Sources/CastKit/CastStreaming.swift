@@ -40,8 +40,12 @@ public enum CastStreaming {
     }
 
     public struct Offer: Sendable {
-        public var videoSSRC: UInt32 = 0x0123_4567
-        public var audioSSRC: UInt32 = 0x0123_4568
+        // Cast reads priority from the SSRC: lower wins, and audio should
+        // beat video when the network is tight. They also have to stay clear
+        // of each other, because the receiver takes `ssrc + 1` for itself —
+        // adjacent values collide and the receiver silently drops a stream.
+        public var audioSSRC: UInt32 = 1_001
+        public var videoSSRC: UInt32 = 51_001
         public var width: Int = 1920
         public var height: Int = 1080
         public var frameRate: Int = 30

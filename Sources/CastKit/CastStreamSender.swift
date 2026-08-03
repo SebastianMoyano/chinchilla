@@ -23,9 +23,9 @@ public final class CastStreamSender: @unchecked Sendable {
         public var packetsResent = 0
     }
 
-    private let connection: NWConnection
+    private let transport: CastStreamTransport
     private let crypto: CastFrameCrypto
-    private let queue = DispatchQueue(label: "cast.stream.rtp")
+    private let queue: DispatchQueue
     private let lock = NSLock()
 
     private var packetizer: CastRTPPacketizer
@@ -52,10 +52,12 @@ public final class CastStreamSender: @unchecked Sendable {
     public var onLog: (@Sendable (String) -> Void)?
 
     public init(
-        host: String, port: Int, keys: CastStreaming.StreamKeys,
+        transport: CastStreamTransport, keys: CastStreaming.StreamKeys,
         ssrc: UInt32, payloadType: UInt8, timebase: Int32 = 90_000,
         initialPlayoutDelayMs: Int = 0
     ) {
+        self.transport = transport
+        self.queue = transport.queue
         self.crypto = CastFrameCrypto(keys: keys)
         self.ssrc = ssrc
         self.timebase = timebase
@@ -64,28 +66,18 @@ public final class CastStreamSender: @unchecked Sendable {
             initialSequenceNumber: UInt16.random(in: 0...UInt16.max)
         )
         self.pendingPlayoutDelayMs = initialPlayoutDelayMs
-        self.connection = NWConnection(
-            host: NWEndpoint.Host(host),
-            port: NWEndpoint.Port(rawValue: UInt16(port))!,
-            using: .udp
-        )
     }
 
     public func start() {
-        connection.stateUpdateHandler = { [weak self] state in
-            if case .failed(let error) = state {
-                self?.onLog?("RTP connection failed: \(error)")
-            }
+        transport.register(ssrc: ssrc) { [weak self] feedback in
+            self?.handle(feedback)
         }
-        connection.start(queue: queue)
-        receiveFeedback()
         startSenderReports()
     }
 
     public func stop() {
         reportTimer?.cancel()
         reportTimer = nil
-        connection.cancel()
     }
 
     public func currentStats() -> Stats {
@@ -110,11 +102,25 @@ public final class CastStreamSender: @unchecked Sendable {
         let ticks = CMTimeConvertScale(
             elapsed, timescale: timebase, method: .roundHalfAwayFromZero
         ).value
-        let rtpTimestamp = UInt32(truncatingIfNeeded: ticks)
+        lock.unlock()
 
+        send(payload: sample.annexB, rtpTimestamp: UInt32(truncatingIfNeeded: ticks),
+             isKeyFrame: sample.isKeyFrame)
+    }
+
+    /// Every Opus packet decodes on its own, so audio has no delta frames —
+    /// each one is sent as a key frame referencing itself.
+    public func sendAudio(_ packet: OpusAudioEncoder.Packet) {
+        send(payload: packet.data,
+             rtpTimestamp: UInt32(truncatingIfNeeded: packet.sampleTime),
+             isKeyFrame: true)
+    }
+
+    public func send(payload: Data, rtpTimestamp: UInt32, isKeyFrame: Bool) {
+        lock.lock()
         let id = frameID
         // A key frame stands on its own; a delta frame names the one before it.
-        let referenced = sample.isKeyFrame ? id : lastReferencedID
+        let referenced = isKeyFrame ? id : lastReferencedID
         frameID &+= 1
         lastReferencedID = id
         lastRTPTimestamp = rtpTimestamp
@@ -122,14 +128,14 @@ public final class CastStreamSender: @unchecked Sendable {
         pendingPlayoutDelayMs = 0
         lock.unlock()
 
-        guard let encrypted = crypto.crypt(sample.annexB, frameID: id) else {
+        guard let encrypted = crypto.crypt(payload, frameID: id) else {
             onLog?("Frame \(id) couldn't be encrypted — dropped")
             return
         }
 
         let frame = CastEncodedFrame(
             frameID: id, referencedFrameID: referenced, rtpTimestamp: rtpTimestamp,
-            isKeyFrame: sample.isKeyFrame, payload: encrypted, newPlayoutDelayMs: delay
+            isKeyFrame: isKeyFrame, payload: encrypted, newPlayoutDelayMs: delay
         )
 
         lock.lock()
@@ -154,10 +160,10 @@ public final class CastStreamSender: @unchecked Sendable {
         for (index, packet) in packets.enumerated() {
             let group = index / burst
             if group == 0 {
-                connection.send(content: packet, completion: .idempotent)
+                transport.send(packet)
             } else {
                 queue.asyncAfter(deadline: .now() + .milliseconds(group)) { [weak self] in
-                    self?.connection.send(content: packet, completion: .idempotent)
+                    self?.transport.send(packet)
                 }
             }
         }
@@ -184,7 +190,7 @@ public final class CastStreamSender: @unchecked Sendable {
             ssrc: ssrc, ntp: CastRTP.ntpTimestamp(), rtpTimestamp: rtpTimestamp,
             packetCount: packets, octetCount: octets
         )
-        connection.send(content: report, completion: .idempotent)
+        transport.send(report)
     }
 
     /// Caller must hold the lock.
@@ -204,32 +210,20 @@ public final class CastStreamSender: @unchecked Sendable {
         return result
     }
 
-    private func receiveFeedback() {
-        connection.receiveMessage { [weak self] data, _, _, error in
-            guard let self else { return }
-            if let data, !data.isEmpty {
-                let feedback = CastRTP.parseFeedback(data)
-                self.lock.lock()
-                self.stats.reportsReceived += 1
-                if let ack = feedback.ackFrameID { self.stats.lastAckedFrameID = ack }
-                if let delay = feedback.playoutDelayMs { self.stats.receiverPlayoutDelayMs = delay }
-                if feedback.lossFields > 0 { self.stats.lossReports += feedback.lossFields }
-                if feedback.wantsKeyFrame { self.stats.keyFrameRequests += 1 }
-                let isFirst = self.stats.reportsReceived == 1
-                let resend = self.packetsToResend(for: feedback.nacks)
-                self.stats.packetsResent += resend.count
-                self.lock.unlock()
+    private func handle(_ feedback: CastRTP.Feedback) {
+        lock.lock()
+        stats.reportsReceived += 1
+        if let ack = feedback.ackFrameID { stats.lastAckedFrameID = ack }
+        if let delay = feedback.playoutDelayMs { stats.receiverPlayoutDelayMs = delay }
+        if feedback.lossFields > 0 { stats.lossReports += feedback.lossFields }
+        if feedback.wantsKeyFrame { stats.keyFrameRequests += 1 }
+        let isFirst = stats.reportsReceived == 1
+        let resend = packetsToResend(for: feedback.nacks)
+        stats.packetsResent += resend.count
+        lock.unlock()
 
-                for packet in resend {
-                    self.connection.send(content: packet, completion: .idempotent)
-                }
-                if isFirst {
-                    self.onLog?("first RTCP from the receiver (\(data.count) bytes) — " +
-                                "it is talking back")
-                }
-                if feedback.wantsKeyFrame { self.onKeyFrameRequest?() }
-            }
-            if error == nil { self.receiveFeedback() }
-        }
+        for packet in resend { transport.send(packet) }
+        if isFirst { onLog?("receiver is acknowledging stream \(ssrc)") }
+        if feedback.wantsKeyFrame { onKeyFrameRequest?() }
     }
 }

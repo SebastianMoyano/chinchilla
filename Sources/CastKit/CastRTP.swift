@@ -134,6 +134,9 @@ public enum CastRTP {
     /// What the receiver tells us back. We only act on the parts that change
     /// what the sender must do next.
     public struct Feedback: Sendable {
+        /// Which of our streams this is about — audio and video share a
+        /// socket, so this is how they're told apart.
+        public var targetSSRC: UInt32?
         /// The receiver lost enough that only a fresh key frame will recover it.
         public var wantsKeyFrame = false
         /// Checkpoint frame: everything up to and including this one has been
@@ -188,7 +191,16 @@ public enum CastRTP {
             else { break }
 
             // Both live under packet type 206 (payload-specific feedback);
-            // the subtype is what tells them apart.
+            // the subtype is what tells them apart. The body opens with the
+            // receiver's SSRC and then ours, which is the stream it's about.
+            if packetType == 206, feedback.targetSSRC == nil,
+               let media = data.index(bodyStart, offsetBy: 4, limitedBy: data.endIndex),
+               data.index(media, offsetBy: 4, limitedBy: data.endIndex) != nil {
+                feedback.targetSSRC = UInt32(data[media]) << 24
+                    | UInt32(data[data.index(media, offsetBy: 1)]) << 16
+                    | UInt32(data[data.index(media, offsetBy: 2)]) << 8
+                    | UInt32(data[data.index(media, offsetBy: 3)])
+            }
             if packetType == 206, subtype == 1 {
                 feedback.wantsKeyFrame = true
             } else if packetType == 206, subtype == 15 {

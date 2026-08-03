@@ -49,6 +49,8 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
     /// Set to bypass the HLS segmenter and receive raw frames — the
     /// low-latency path encodes them itself.
     public var onVideoSample: (@Sendable (CMSampleBuffer) -> Void)?
+    /// Same idea for system audio.
+    public var onAudioSample: (@Sendable (CMSampleBuffer) -> Void)?
 
     public override init() { super.init() }
 
@@ -156,7 +158,11 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
                 segmenter?.append(video: sampleBuffer)
             }
         case .audio:
-            segmenter?.append(audio: sampleBuffer)
+            if let sink = onAudioSample {
+                sink(sampleBuffer)
+            } else {
+                segmenter?.append(audio: sampleBuffer)
+            }
         default:
             break
         }

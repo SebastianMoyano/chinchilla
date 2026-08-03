@@ -186,6 +186,16 @@ struct CastRTCPTests {
         #expect(CastRTP.parseFeedback(packet).wantsKeyFrame)
     }
 
+    @Test("Feedback names the stream it is about, so audio and video can share a socket")
+    func targetSSRC() {
+        var packet = Data([0x8F, 206, 0x00, 0x04])
+        packet.appendBigEndian(UInt32(0xAAAA_AAAA))     // receiver's own SSRC
+        packet.appendBigEndian(UInt32(51_001))          // ours — the video stream
+        packet.append(contentsOf: Array("CAST".utf8))
+        packet.append(contentsOf: [200, 0, 0x01, 0x90])
+        #expect(CastRTP.parseFeedback(packet).targetSSRC == 51_001)
+    }
+
     @Test("Cast feedback yields the checkpoint frame and the receiver's delay")
     func castFeedback() {
         // Type 206 subtype 15, body: receiver SSRC, sender SSRC, 'CAST',
