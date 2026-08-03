@@ -81,12 +81,39 @@ struct MenuBarView: View {
                 }
             }
 
-            Button("Quit Chinchilla") {
-                NSApp.terminate(nil)
+            Divider()
+
+            // Version + updates, always visible and always tappable.
+            HStack(spacing: 6) {
+                Text(verbatim: "v\(appState.updates.currentVersion)")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                if let version = appState.updates.availableVersion {
+                    Link(destination: appState.updates.releaseURL) {
+                        Label("Get \(version)", systemImage: "arrow.down.circle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.green)
+                    }
+                } else if let result = appState.updates.manualResult {
+                    Text(verbatim: result)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button("Check for updates") {
+                        appState.updates.checkNow()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Quit") {
+                    NSApp.terminate(nil)
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
         .padding(14)
         .frame(width: 260)
@@ -94,6 +121,7 @@ struct MenuBarView: View {
             let usage = DiskUsage.current()
             freeSpace = usage.available
             pressure = SystemSampler.memoryPressure()
+            appState.updates.checkIfStale()
         }
     }
 

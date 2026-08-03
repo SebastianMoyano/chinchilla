@@ -160,6 +160,9 @@
 "You're up to date (%@)." = "Estás al día (%@).";
 "Couldn't check for updates." = "No se pudo comprobar si hay actualizaciones.";
 "Sponsor" = "Apoyar";
+"Get %@" = "Bajar %@";
+"Check for updates" = "Buscar actualizaciones";
+"Quit" = "Salir";
 "Enjoying Chinchilla? Support its development ♥" = "¿Te sirve Chinchilla? Apoya su desarrollo ♥";
 
 /* Hardening 0.2.1 */

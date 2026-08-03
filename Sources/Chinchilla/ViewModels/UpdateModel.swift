@@ -20,13 +20,14 @@ final class UpdateModel {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
     }
 
-    /// Quiet check, at most once a day. Failures are silent — an update
-    /// check must never bother anyone. Skipped entirely for unbundled
-    /// (`swift run`) builds, whose version reads as "0".
+    /// Quiet check, at most once an hour (daily was too slow — releases went
+    /// unseen for a day). Failures are silent — an update check must never
+    /// bother anyone. Skipped entirely for unbundled (`swift run`) builds,
+    /// whose version reads as "0".
     func checkIfStale() {
         guard Bundle.main.bundleIdentifier != nil else { return }
         let last = UserDefaults.standard.double(forKey: Self.lastCheckKey)
-        guard Date.now.timeIntervalSince1970 - last > 86_400 else { return }
+        guard Date.now.timeIntervalSince1970 - last > 3_600 else { return }
         Task { await check(manual: false) }
     }
 
