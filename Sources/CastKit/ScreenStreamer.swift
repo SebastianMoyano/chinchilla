@@ -46,12 +46,24 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
     /// Set when the stream dies on its own (display disconnected, etc.).
     public var onStopped: (@Sendable (String?) -> Void)?
 
+    /// Set to bypass the HLS segmenter and receive raw frames — the
+    /// low-latency path encodes them itself.
+    public var onVideoSample: (@Sendable (CMSampleBuffer) -> Void)?
+
     public override init() { super.init() }
 
-    public func start(quality: MirrorQuality, includeAudio: Bool) async throws {
-        guard !isRunning else { return }
-        store.reset()
+    /// The capture size for a quality box, keeping the display's aspect ratio.
+    public static func captureSize(
+        for quality: MirrorQuality, display: SCDisplay
+    ) -> (width: Int, height: Int) {
+        let (boxWidth, boxHeight) = quality.size
+        let scale = min(Double(boxWidth) / Double(display.width),
+                        Double(boxHeight) / Double(display.height))
+        return (Int((Double(display.width) * scale / 2).rounded()) * 2,   // even dimensions
+                Int((Double(display.height) * scale / 2).rounded()) * 2)
+    }
 
+    public static func mainDisplay() async throws -> SCDisplay {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: false
         )
@@ -59,24 +71,30 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
             throw NSError(domain: "CastKit", code: 10,
                           userInfo: [NSLocalizedDescriptionKey: "No display to capture"])
         }
+        return display
+    }
 
-        // Keep the display's aspect ratio inside the quality box.
-        let (boxWidth, boxHeight) = quality.size
-        let scale = min(Double(boxWidth) / Double(display.width),
-                        Double(boxHeight) / Double(display.height))
-        let width = Int((Double(display.width) * scale / 2).rounded()) * 2   // even dimensions
-        let height = Int((Double(display.height) * scale / 2).rounded()) * 2
+    public func start(
+        quality: MirrorQuality, includeAudio: Bool, frameRate: Int = 30
+    ) async throws {
+        guard !isRunning else { return }
+        store.reset()
 
-        let segmenter = try HLSSegmenter(
-            width: width, height: height, bitrate: quality.bitrate,
-            includeAudio: includeAudio, store: store
-        )
-        self.segmenter = segmenter
+        let display = try await Self.mainDisplay()
+        let (width, height) = Self.captureSize(for: quality, display: display)
+
+        // The low-latency path owns its own encoder, so no segmenter.
+        if onVideoSample == nil {
+            self.segmenter = try HLSSegmenter(
+                width: width, height: height, bitrate: quality.bitrate,
+                includeAudio: includeAudio, store: store
+            )
+        }
 
         let configuration = SCStreamConfiguration()
         configuration.width = width
         configuration.height = height
-        configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
+        configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(frameRate))
         configuration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
         configuration.queueDepth = 5
         configuration.showsCursor = true
@@ -132,7 +150,11 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
                   ) as? [[SCStreamFrameInfo: Any]],
                   let raw = attachments.first?[.status] as? Int,
                   SCFrameStatus(rawValue: raw) == .complete else { return }
-            segmenter?.append(video: sampleBuffer)
+            if let sink = onVideoSample {
+                sink(sampleBuffer)
+            } else {
+                segmenter?.append(video: sampleBuffer)
+            }
         case .audio:
             segmenter?.append(audio: sampleBuffer)
         default:

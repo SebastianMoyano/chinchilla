@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import CastKit
 import CleanCore
 import SystemKit
 
@@ -13,6 +14,7 @@ enum ChinchillaCLI {
         case mirrorTest(host: String)
         case gameStreamTest(seconds: Int)
         case castStreamTest(host: String)
+        case castStreamMirror(host: String, seconds: Int, delayMs: Int)
         case help
     }
 
@@ -26,6 +28,13 @@ enum ChinchillaCLI {
             return .clean(real: args.contains("--real"))
         case "caststream-test":
             return .castStreamTest(host: args.count > 1 ? args[1] : "")
+        case "caststream-mirror":
+            return .castStreamMirror(
+                host: args.count > 1 ? args[1] : "",
+                seconds: args.count > 2 ? (Int(args[2]) ?? 30) : 30,
+                delayMs: args.count > 3 ? (Int(args[3]) ?? CastStreaming.defaultTargetDelayMs)
+                                        : CastStreaming.defaultTargetDelayMs
+            )
         case "gamestream-test":
             return .gameStreamTest(seconds: args.count > 1 ? (Int(args[1]) ?? 180) : 180)
         case "mirror-test":
@@ -48,6 +57,14 @@ enum ChinchillaCLI {
                 return 1
             }
             return await CastStreamDiagnostics.run(host: host)
+        case .castStreamMirror(let host, let seconds, let delayMs):
+            guard !host.isEmpty else {
+                print("usage: Chinchilla caststream-mirror <tv-ip> [seconds] [playout-delay-ms]")
+                return 1
+            }
+            return await CastMirrorRTDiagnostics.run(
+                host: host, seconds: seconds, playoutDelayMs: delayMs
+            )
         case .gameStreamTest(let seconds):
             return await GameStreamDiagnostics.run(seconds: seconds)
         case .mirrorTest(let host):
