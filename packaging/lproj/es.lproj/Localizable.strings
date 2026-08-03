@@ -320,6 +320,9 @@
 "Weekly safe clean" = "Limpieza semanal";
 "Memory heads-up" = "Aviso de memoria";
 "The heads-up is gentle: at most one notification every 2 hours, only when memory is genuinely struggling." = "El aviso es suave: máximo una notificación cada 2 horas, y solo cuando la memoria de verdad no da más.";
+"Heads-ups are gentle: at most one memory alert every 2 hours (only when it's genuinely struggling), and a restart reminder past 14 days of uptime, at most weekly." = "Los avisos son suaves: máximo una alerta de memoria cada 2 horas (solo cuando de verdad no da más), y un recordatorio de reinicio pasados 14 días encendido, máximo semanal.";
+"%lld days without a restart" = "%lld días sin reiniciar";
+"A reboot clears leaked memory and often brings the snappiness back. Old-fashioned, but it works — whenever suits you." = "Un reinicio limpia memoria filtrada y suele devolver la agilidad. Anticuado, pero funciona — cuando te acomode.";
 "How do you use your Mac?" = "¿Cómo usas tu Mac?";
 "If it's your everyday machine (especially with 8 GB of memory), turn this on and forget about it. Chinchilla will sleep background browser tabs, run a safe clean once a week, and give you a gentle heads-up when memory is the reason things feel slow." = "Si es tu máquina de todos los días (sobre todo con 8 GB de memoria), actívalo y olvídate. Chinchilla dormirá las pestañas en segundo plano, hará una limpieza segura una vez a la semana, y te avisará con calma cuando la memoria sea la razón de que se sienta lento.";
 "Gamer too? Gaming Mode lives in the sidebar for when you play. Everything here can be changed later from the Dashboard." = "¿También juegas? El Modo gaming está en la barra lateral para cuando juegues. Todo esto se puede cambiar después desde el Panel.";

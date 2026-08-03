@@ -14,6 +14,16 @@ public struct HealthReport: Sendable {
     public init() {}
 }
 
+public enum SystemUptime {
+    public static func days() -> Int {
+        var boottime = timeval()
+        var size = MemoryLayout<timeval>.size
+        guard sysctlbyname("kern.boottime", &boottime, &size, nil, 0) == 0 else { return 0 }
+        let up = Date().timeIntervalSince1970 - TimeInterval(boottime.tv_sec)
+        return max(0, Int(up / 86_400))
+    }
+}
+
 public enum HealthCheck {
     /// All external probes run CONCURRENTLY with short timeouts — the wall
     /// time is the slowest single probe (~5 s worst case), never the sum.
@@ -32,12 +42,7 @@ public enum HealthCheck {
         )
 
         // Local, instant probes while the subprocesses run.
-        var boottime = timeval()
-        var size = MemoryLayout<timeval>.size
-        if sysctlbyname("kern.boottime", &boottime, &size, nil, 0) == 0 {
-            let up = Date().timeIntervalSince1970 - TimeInterval(boottime.tv_sec)
-            report.uptimeDays = max(0, Int(up / 86_400))
-        }
+        report.uptimeDays = SystemUptime.days()
         report.zombieCount = countZombies()
 
         if let output = await diskOutput,

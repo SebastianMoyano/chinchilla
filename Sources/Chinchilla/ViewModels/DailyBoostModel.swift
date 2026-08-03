@@ -15,6 +15,11 @@ final class DailyBoostModel {
     static let enabledKey = "dailyBoost"
     private static let lastAlertKey = "dailyBoost.lastAlert"
     private static let alertCooldown: TimeInterval = 2 * 3600
+    /// Restart reminder: fires past this uptime, then respects a long
+    /// cooldown — a nudge, never a nag.
+    private static let uptimeThresholdDays = 14
+    private static let lastUptimeAlertKey = "dailyBoost.lastUptimeAlert"
+    private static let uptimeAlertCooldown: TimeInterval = 7 * 86_400
 
     private(set) var isEnabled = UserDefaults.standard.bool(forKey: DailyBoostModel.enabledKey)
     private var watchdog: Task<Void, Never>?
@@ -67,9 +72,28 @@ final class DailyBoostModel {
         }
     }
 
+    /// The most effective advice nobody gives in time: "when did you last
+    /// restart?". Fires once past 14 days of uptime, then at most weekly.
+    private func checkUptime() async {
+        let days = SystemUptime.days()
+        guard days >= Self.uptimeThresholdDays else { return }
+        let last = UserDefaults.standard.double(forKey: Self.lastUptimeAlertKey)
+        guard Date.now.timeIntervalSince1970 - last > Self.uptimeAlertCooldown else { return }
+        UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: Self.lastUptimeAlertKey)
+
+        let content = UNMutableNotificationContent()
+        content.title = String(localized: "\(days) days without a restart")
+        content.body = String(localized: "A reboot clears leaked memory and often brings the snappiness back. Old-fashioned, but it works — whenever suits you.")
+        try? await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: "dailyboost.uptime", content: content, trigger: nil)
+        )
+    }
+
     private func checkPressure() async {
         // Adapt the browser performance level to how the machine is doing.
         appState?.tabSaver.reevaluateAutoIfNeeded()
+
+        await checkUptime()
 
         let pressure = SystemSampler.memoryPressure()
         guard pressure == .warning || pressure == .critical else { return }

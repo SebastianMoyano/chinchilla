@@ -49,7 +49,7 @@ struct DailyBoostCard: View {
                 Spacer()
             }
             if boost.isEnabled {
-                Text("The heads-up is gentle: at most one notification every 2 hours, only when memory is genuinely struggling.")
+                Text("Heads-ups are gentle: at most one memory alert every 2 hours (only when it's genuinely struggling), and a restart reminder past 14 days of uptime, at most weekly.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
