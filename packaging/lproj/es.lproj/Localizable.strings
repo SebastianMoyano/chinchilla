@@ -380,3 +380,6 @@
 "No Chromium browser (Chrome, Edge, Brave) detected — you can skip this." = "No se detectó un navegador Chromium (Chrome, Edge, Brave) — puedes saltarte esto.";
 "Enable for %@" = "Activar para %@";
 "Applies on next browser restart. The browser will show \"Managed by your organization\" — turn it off anytime from the Dashboard and it disappears." = "Aplica al reiniciar el navegador. Mostrará \"Administrado por tu organización\" — apágalo cuando quieras desde el Panel y desaparece.";
+
+/* Disk ring (0.8.3) */
+"full" = "lleno";

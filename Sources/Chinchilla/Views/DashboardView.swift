@@ -81,17 +81,9 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Startup Disk", systemImage: "internaldrive.fill")
                 .font(.headline)
-            Gauge(value: usage.usedFraction) {
-                EmptyView()
-            } currentValueLabel: {
-                Text(usage.used, format: .byteCount(style: .file))
-                    .font(.title3.bold())
-                    .contentTransition(.numericText())
-            }
-            .gaugeStyle(.accessoryCircularCapacity)
-            .scaleEffect(1.4)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            DiskRing(usage: usage)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
             VStack(alignment: .leading, spacing: 4) {
                 statRow("Used", usage.used)
                 statRow("Free", usage.available)
@@ -163,6 +155,45 @@ struct DashboardView: View {
             endPoint: .center
         )
         .ignoresSafeArea()
+    }
+}
+
+/// Clean capacity ring: track + rounded arc colored by how full the disk
+/// is, percentage front and center where it actually fits.
+struct DiskRing: View {
+    let usage: DiskUsage
+
+    private var color: Color {
+        switch usage.usedFraction {
+        case ..<0.8: .green
+        case ..<0.92: .orange
+        default: .red
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(.quaternary.opacity(0.5), style: StrokeStyle(lineWidth: 11))
+            Circle()
+                .trim(from: 0, to: max(0.02, usage.usedFraction))
+                .stroke(
+                    color.gradient,
+                    style: StrokeStyle(lineWidth: 11, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .animation(.spring, value: usage.usedFraction)
+            VStack(spacing: 0) {
+                Text(verbatim: "\(Int(usage.usedFraction * 100))%")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .contentTransition(.numericText())
+                Text("full")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 130, height: 130)
+        .accessibilityLabel(Text("Disk \(Int(usage.usedFraction * 100)) percent full"))
     }
 }
 
