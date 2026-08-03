@@ -299,7 +299,7 @@ struct MirrorCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Mirror this screen")
                         .font(.headline)
-                    Text("Your whole desktop, live on the TV. There's a few seconds of delay — great for videos, photos and presenting; not for using the TV as an interactive monitor.")
+                    Text("Your whole desktop, live on the TV — about 1–3 seconds behind. Great for videos, photos and presenting; not for using the TV as an interactive monitor. (TVs buffer before they show anything; that floor is the receiver's, not ours.)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -323,7 +323,7 @@ struct MirrorCard: View {
                     .foregroundStyle(.secondary)
             } else if !model.screenPermissionGranted {
                 HStack(spacing: 8) {
-                    Label("Screen Recording permission is needed", systemImage: "lock.shield")
+                    Label("Screen Recording permission is needed — and macOS asks again after every app update", systemImage: "lock.shield")
                         .font(.caption)
                         .foregroundStyle(.orange)
                     Button("Grant…") { model.requestScreenPermission() }
@@ -367,5 +367,10 @@ struct MirrorCard: View {
             in: RoundedRectangle(cornerRadius: 14)
         )
         .onAppear { model.refreshScreenPermission() }
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification
+        )) { _ in
+            model.refreshScreenPermission()
+        }
     }
 }

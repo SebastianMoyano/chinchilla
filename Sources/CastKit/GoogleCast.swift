@@ -252,6 +252,12 @@ public actor GoogleCastSession {
                 }
             }
         case Self.namespaceMedia:
+            if type == "LOAD_FAILED" || type == "LOAD_CANCELLED" || type == "ERROR" || type == "INVALID_REQUEST" {
+                let detail = (json["detailedErrorCode"] as? Int).map { " (code \($0))" } ?? ""
+                let reason = (json["reason"] as? String).map { ": \($0)" } ?? ""
+                continuation?.yield(.error("\(type)\(detail)\(reason)"))
+                return
+            }
             guard type == "MEDIA_STATUS",
                   let statuses = json["status"] as? [[String: Any]],
                   let status = statuses.first else { return }

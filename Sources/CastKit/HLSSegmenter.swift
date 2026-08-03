@@ -23,7 +23,10 @@ final class HLSSegmenter: NSObject, AVAssetWriterDelegate, @unchecked Sendable {
         self.store = store
         writer = AVAssetWriter(contentType: UTType.mpeg4Movie)
         writer.outputFileTypeProfile = .mpeg4AppleHLS
-        writer.preferredOutputSegmentInterval = CMTime(seconds: 1, preferredTimescale: 1)
+        // Latency is dominated by segment length × the player's buffer.
+        // Half-second parts roughly halve the delay; going below this
+        // costs more overhead than it saves on Cast receivers.
+        writer.preferredOutputSegmentInterval = CMTime(value: 1, timescale: 2)
         writer.initialSegmentStartTime = .zero
 
         let videoSettings: [String: Any] = [
@@ -34,7 +37,7 @@ final class HLSSegmenter: NSObject, AVAssetWriterDelegate, @unchecked Sendable {
                 AVVideoAverageBitRateKey: bitrate,
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
                 // One sync frame per segment: mandatory for clean HLS parts.
-                AVVideoMaxKeyFrameIntervalDurationKey: 1,
+                AVVideoMaxKeyFrameIntervalDurationKey: 0.5,
                 AVVideoExpectedSourceFrameRateKey: 30,
                 AVVideoAllowFrameReorderingKey: false,
             ],

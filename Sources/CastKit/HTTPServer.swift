@@ -11,6 +11,8 @@ public final class CastHTTPServer: @unchecked Sendable {
     private var listener: NWListener?
     private let files = NSMutableDictionary()  // token -> file URL (queue-confined)
     public private(set) var port: UInt16 = 0
+    /// Diagnostics hook: every request path the client asks for.
+    public var onRequest: (@Sendable (String, String) -> Void)?
 
     public init() {}
 
@@ -136,6 +138,7 @@ public final class CastHTTPServer: @unchecked Sendable {
         }
         let method = String(parts[0])
         let path = String(parts[1])
+        onRequest?(method, path)
         guard method == "GET" || method == "HEAD" else {
             sendSimple(connection, status: "405 Method Not Allowed")
             completion()

@@ -7,9 +7,9 @@ public final class HLSSegmentStore: @unchecked Sendable {
     private var initSegment: Data?
     private var segments: [(index: Int, data: Data, duration: Double)] = []
     private var nextIndex = 0
-    /// Six one-second parts ≈ six seconds of rewind buffer, which is all a
-    /// live mirror needs (and keeps memory tiny).
-    private let windowSize = 6
+    /// Eight half-second parts ≈ four seconds of rewind. Small windows
+    /// keep the player close to the live edge; too small and it stalls.
+    private let windowSize = 8
 
     public init() {}
 
@@ -47,7 +47,8 @@ public final class HLSSegmentStore: @unchecked Sendable {
     /// fragmented MP4 segments.
     public func playlist() -> String {
         lock.withLock {
-            let target = Int(ceil(segments.map(\.duration).max() ?? 1))
+            let longest = segments.map(\.duration).max() ?? 1
+            let target = max(1, Int(ceil(longest)))
             var lines = [
                 "#EXTM3U",
                 "#EXT-X-VERSION:7",

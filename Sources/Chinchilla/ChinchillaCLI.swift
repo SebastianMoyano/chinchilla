@@ -10,6 +10,7 @@ enum ChinchillaCLI {
     enum Command {
         case scan(json: Bool)
         case clean(real: Bool)
+        case mirrorTest(host: String)
         case help
     }
 
@@ -21,6 +22,8 @@ enum ChinchillaCLI {
             return .scan(json: args.contains("--json"))
         case "clean":
             return .clean(real: args.contains("--real"))
+        case "mirror-test":
+            return .mirrorTest(host: args.count > 1 ? args[1] : "")
         case "help", "--help", "-h":
             return .help
         default:
@@ -33,6 +36,12 @@ enum ChinchillaCLI {
         case .help:
             print(helpText)
             return 0
+        case .mirrorTest(let host):
+            guard !host.isEmpty else {
+                print("usage: Chinchilla mirror-test <tv-ip>")
+                return 1
+            }
+            return await MirrorDiagnostics.run(host: host)
         case .scan(let json):
             let report = await CleanScanner.scan(hasFullDiskAccess: Permissions.hasFullDiskAccess())
             if json {
