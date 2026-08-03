@@ -75,11 +75,15 @@ public final class RealtimeH264Encoder: @unchecked Sendable {
     }
 
     public func encode(_ sampleBuffer: CMSampleBuffer) {
-        guard let session, let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let duration = CMSampleBufferGetDuration(sampleBuffer)
 
+        // Frames arrive on the capture queue while `finish()` may be
+        // invalidating the session from another thread — read it under the
+        // same lock that clears it.
         lock.lock()
+        guard let session else { lock.unlock(); return }
         let wantsKey = forceKeyFrame
         forceKeyFrame = false
         lock.unlock()
@@ -101,10 +105,14 @@ public final class RealtimeH264Encoder: @unchecked Sendable {
     }
 
     public func finish() {
+        lock.lock()
+        let session = self.session
+        self.session = nil
+        onSample = nil
+        lock.unlock()
         guard let session else { return }
         VTCompressionSessionCompleteFrames(session, untilPresentationTimeStamp: .invalid)
         VTCompressionSessionInvalidate(session)
-        self.session = nil
     }
 
     deinit { finish() }

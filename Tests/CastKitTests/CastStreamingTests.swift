@@ -271,6 +271,45 @@ struct CastRTCPTests {
     }
 }
 
+@Suite("Waiting on external subsystems")
+struct TimeoutTests {
+    @Test("A call that never returns gives up instead of hanging the caller")
+    func neverReturns() async {
+        let start = ContinuousClock.now
+        await #expect(throws: TimedOut.self) {
+            try await withTimeout(.milliseconds(150), "Test subsystem") {
+                try await Task.sleep(for: .seconds(60))
+                return 1
+            }
+        }
+        #expect(ContinuousClock.now - start < .seconds(5))
+    }
+
+    @Test("A call that answers in time returns its value untouched")
+    func answersInTime() async throws {
+        let value = try await withTimeout(.seconds(5), "Test subsystem") {
+            try await Task.sleep(for: .milliseconds(20))
+            return 42
+        }
+        #expect(value == 42)
+    }
+
+    @Test("The operation's own error wins over the deadline")
+    func propagatesFailure() async {
+        struct Boom: Error {}
+        await #expect(throws: Boom.self) {
+            try await withTimeout(.seconds(5), "Test subsystem") {
+                throw Boom()
+            }
+        }
+    }
+
+    @Test("Timing out says which subsystem stalled")
+    func message() {
+        #expect(TimedOut("Screen capture").errorDescription?.contains("Screen capture") == true)
+    }
+}
+
 @Suite("Cast Streaming negotiation")
 struct CastStreamingOfferTests {
     @Test("The offer is valid JSON with the fields the receiver reads back")

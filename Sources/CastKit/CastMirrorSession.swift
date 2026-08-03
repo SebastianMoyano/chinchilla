@@ -158,10 +158,13 @@ public final class CastMirrorSession: @unchecked Sendable {
         }
 
         let streamer = ScreenStreamer()
+        // Capture the encoders directly rather than reaching through `self`:
+        // these fire on the capture queues, and `stop()` clears those
+        // properties from another thread.
         streamer.onVideoSample = { [weak encoder] buffer in encoder?.encode(buffer) }
-        if audioAccepted {
-            streamer.onAudioSample = { [weak self] buffer in
-                self?.audioEncoder?.encode(buffer)
+        if let audioEncoder {
+            streamer.onAudioSample = { [weak audioEncoder] buffer in
+                audioEncoder?.encode(buffer)
             }
         }
         streamer.onStopped = { [weak self] message in self?.onStopped?(message) }

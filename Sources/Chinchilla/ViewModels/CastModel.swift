@@ -127,6 +127,18 @@ final class CastModel {
         mirrorUsingFallback = false
         mirrorGeneration += 1
         let generation = mirrorGeneration
+        // A spinner that never stops isn't just confusing: it invalidates the
+        // view every frame, so a stuck start burns a core redrawing forever.
+        // Whatever happens below, the spinner comes down.
+        Task {
+            try? await Task.sleep(for: .seconds(45))
+            if mirrorStarting, mirrorGeneration == generation {
+                mirrorStarting = false
+                if !mirroring {
+                    mirrorError = String(localized: "Starting the mirror took too long. Try again.")
+                }
+            }
+        }
         Task {
             defer { mirrorStarting = false }
 

@@ -65,10 +65,15 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
                 Int((Double(display.height) * scale / 2).rounded()) * 2)
     }
 
-    public static func mainDisplay() async throws -> SCDisplay {
-        let content = try await SCShareableContent.excludingDesktopWindows(
-            false, onScreenWindowsOnly: false
-        )
+    /// ScreenCaptureKit's content query can hang indefinitely when its daemon
+    /// is wedged — it neither returns nor throws. Anything waiting on it needs
+    /// its own clock.
+    public static func mainDisplay(timeout: Duration = .seconds(8)) async throws -> SCDisplay {
+        let content = try await withTimeout(timeout, "Screen capture") {
+            Unchecked(try await SCShareableContent.excludingDesktopWindows(
+                false, onScreenWindowsOnly: false
+            ))
+        }.value
         guard let display = content.displays.first else {
             throw NSError(domain: "CastKit", code: 10,
                           userInfo: [NSLocalizedDescriptionKey: "No display to capture"])
@@ -110,7 +115,10 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
         if includeAudio {
             try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: audioQueue)
         }
-        try await stream.startCapture()
+        let boxed = Unchecked(stream)
+        try await withTimeout(.seconds(10), "Screen capture") {
+            try await boxed.value.startCapture()
+        }
         self.stream = stream
         isRunning = true
     }
@@ -118,7 +126,16 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
     public func stop() async {
         guard isRunning else { return }
         isRunning = false
-        try? await stream?.stopCapture()
+        // Stop delivering frames before tearing anything down, so a callback
+        // can't land on a half-released encoder.
+        onVideoSample = nil
+        onAudioSample = nil
+        if let stream {
+            let boxed = Unchecked(stream)
+            try? await withTimeout(.seconds(5), "Screen capture") {
+                try await boxed.value.stopCapture()
+            }
+        }
         stream = nil
         await segmenter?.finish()
         segmenter = nil
