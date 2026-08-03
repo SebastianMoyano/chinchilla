@@ -40,13 +40,16 @@ public enum DuplicateFinder {
         // Phase 1: collect (path, size, mtime) of candidate files. Hardlinked
         // paths share an inode — deleting one frees nothing, so they count as
         // ONE file here, never as a duplicate pair.
-        var bySize: [Int64: [(path: String, mtime: Date)]] = [:]
-        var seenInodes = Set<String>()
-        for root in scanRoots {
-            collectFiles(root: root, minSize: minSize, isCancelled: isCancelled) { path, size, mtime, dev, ino in
-                guard seenInodes.insert("\(dev):\(ino)").inserted else { return }
-                bySize[size, default: []].append((path, mtime))
+        let bySize = await Blocking.run {
+            var bySize: [Int64: [(path: String, mtime: Date)]] = [:]
+            var seenInodes = Set<String>()
+            for root in scanRoots {
+                collectFiles(root: root, minSize: minSize, isCancelled: isCancelled) { path, size, mtime, dev, ino in
+                    guard seenInodes.insert("\(dev):\(ino)").inserted else { return }
+                    bySize[size, default: []].append((path, mtime))
+                }
             }
+            return bySize
         }
 
         // Phase 2: fingerprint only sizes with 2+ files, in parallel.
@@ -62,7 +65,7 @@ public enum DuplicateFinder {
                 for file in files {
                     group.addTask {
                         if isCancelled?() == true { return nil }
-                        guard let digest = fingerprint(path: file.path, size: size) else { return nil }
+                        guard let digest = await Blocking.run({ fingerprint(path: file.path, size: size) }) else { return nil }
                         return Hit(key: "\(size)-\(digest)", size: size, path: file.path, mtime: file.mtime)
                     }
                 }

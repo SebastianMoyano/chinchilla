@@ -92,7 +92,7 @@ public enum DiskScanner {
         await withTaskGroup(of: WalkResult.self) { group in
             for dir in subdirs {
                 group.addTask {
-                    FTSWalker.walk(path: dir, options: walkerOptions)
+                    await Blocking.run { FTSWalker.walk(path: dir, options: walkerOptions) }
                 }
             }
             for await result in group {

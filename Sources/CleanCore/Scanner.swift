@@ -65,7 +65,7 @@ public enum CleanScanner {
         await withTaskGroup(of: CleanItem?.self) { group in
             for candidate in candidates {
                 group.addTask {
-                    let size = DiskSize.allocated(at: candidate.path)
+                    let size = await Blocking.run { DiskSize.allocated(at: candidate.path) }
                     guard size > 0 else { return nil }
                     return CleanItem(
                         ruleID: rule.id,

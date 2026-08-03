@@ -65,7 +65,7 @@ public enum AppInventory {
         var apps: [InstalledApp] = []
         await withTaskGroup(of: InstalledApp.self) { group in
             for path in paths {
-                group.addTask { makeApp(path: path) }
+                group.addTask { await Blocking.run { makeApp(path: path) } }
             }
             for await app in group {
                 apps.append(app)

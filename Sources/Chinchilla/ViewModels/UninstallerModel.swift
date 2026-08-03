@@ -2,6 +2,7 @@ import SwiftUI
 import Observation
 import AppKit
 import CleanCore
+import DiskScanKit
 
 @MainActor
 @Observable
@@ -39,9 +40,7 @@ final class UninstallerModel {
         includeAppBundle = true
         lastResult = nil
         Task {
-            let found = await Task.detached(priority: .userInitiated) {
-                LeftoverFinder.find(for: app)
-            }.value
+            let found = await Blocking.run { LeftoverFinder.find(for: app) }
             // The user may have opened another app's sheet meanwhile — never
             // attach app A's leftovers to app B.
             guard inspecting?.id == app.id else { return }

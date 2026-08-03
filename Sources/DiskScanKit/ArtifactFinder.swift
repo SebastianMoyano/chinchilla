@@ -52,7 +52,7 @@ public enum ArtifactFinder {
         await withTaskGroup(of: ProjectArtifact?.self) { group in
             for candidate in candidates {
                 group.addTask {
-                    let size = DiskSize.allocated(at: candidate.path)
+                    let size = await Blocking.run { DiskSize.allocated(at: candidate.path) }
                     guard size > 0 else { return nil }
                     return ProjectArtifact(
                         path: candidate.path,
