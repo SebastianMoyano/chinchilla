@@ -1,0 +1,115 @@
+import SwiftUI
+import Observation
+import AppKit
+import SystemKit
+
+/// "Memory Doctor": explains memory health in plain language and offers the
+/// only honest fixes — closing the real consumers, sleeping browser tabs,
+/// trimming login items. No fake "free RAM" buttons.
+@MainActor
+@Observable
+final class MemoryModel {
+    enum Health {
+        case fine       // pressure normal
+        case tight      // warning
+        case struggling // critical
+        case unknown
+    }
+
+    var health: Health = .unknown
+    var swapUsed: Int64 = 0
+    var memoryTotal: Int64 = 0
+    var topApps: [AppMemoryUsage] = []
+    var refreshing = false
+
+    struct Tip: Identifiable {
+        let id = UUID()
+        let icon: String
+        let text: LocalizedStringKey
+        let destination: SidebarItem?
+    }
+
+    func refresh() {
+        guard !refreshing else { return }
+        refreshing = true
+        Task {
+            let pressure = SystemSampler.memoryPressure()
+            health = switch pressure {
+            case .normal: .fine
+            case .warning: .tight
+            case .critical: .struggling
+            case .unknown: .unknown
+            }
+            swapUsed = SystemSampler.swapUsed()
+            var size: UInt64 = 0
+            var length = MemoryLayout<UInt64>.size
+            sysctlbyname("hw.memsize", &size, &length, nil, 0)
+            memoryTotal = Int64(size)
+            topApps = await Task.detached(priority: .userInitiated) {
+                ProcessMemory.topConsumers()
+            }.value
+            refreshing = false
+        }
+    }
+
+    /// The biggest actionable consumer (excluding the macOS bucket).
+    var biggestApp: AppMemoryUsage? {
+        topApps.first { $0.name != "macOS" }
+    }
+
+    func canQuit(_ app: AppMemoryUsage) -> Bool {
+        runningApplication(named: app.name) != nil
+    }
+
+    func quit(_ app: AppMemoryUsage) {
+        runningApplication(named: app.name)?.terminate()
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            refreshing = false
+            refresh()
+        }
+    }
+
+    private func runningApplication(named name: String) -> NSRunningApplication? {
+        NSWorkspace.shared.runningApplications.first {
+            $0.activationPolicy == .regular && $0.localizedName == name
+        }
+    }
+
+    private static let browserNames: Set<String> = [
+        "Google Chrome", "Safari", "Microsoft Edge", "Brave Browser", "Arc", "Firefox",
+    ]
+
+    var tips: [Tip] {
+        var tips: [Tip] = []
+        if let biggest = biggestApp, Self.browserNames.contains(biggest.name) {
+            tips.append(Tip(
+                icon: "square.on.square.dashed",
+                text: "Your browser is the biggest memory user. \"Put background tabs to sleep\" (below) helps a lot without closing anything.",
+                destination: nil
+            ))
+        }
+        if health != .fine, swapUsed > 2 << 30 {
+            tips.append(Tip(
+                icon: "arrow.left.arrow.right",
+                text: "Your Mac is borrowing disk space as emergency memory (swap). Closing apps you're not using right now gives the biggest relief.",
+                destination: nil
+            ))
+        }
+        if memoryTotal <= 8 << 30, health != .fine {
+            tips.append(Tip(
+                icon: "memorychip",
+                text: "With 8 GB of memory, 2–3 big apps at a time is the sweet spot. Check what launches automatically in Startup.",
+                destination: .startup
+            ))
+        }
+        if health == .fine, tips.isEmpty {
+            tips.append(Tip(
+                icon: "checkmark.circle",
+                text: "Nothing to free: macOS deliberately keeps memory busy to make your apps faster. \"Used\" memory is not a problem — pressure is, and yours is fine.",
+                destination: nil
+            ))
+        }
+        return Array(tips.prefix(3))
+    }
+}

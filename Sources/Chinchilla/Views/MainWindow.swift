@@ -17,17 +17,29 @@ struct MainWindow: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                if let version = appState.updates.availableVersion {
-                    // Passive: a quiet capsule, no dialogs ever.
-                    Link(destination: appState.updates.releaseURL) {
-                        Label("\(version) available", systemImage: "arrow.down.circle.fill")
+                if appState.updates.installPhase == .downloading
+                    || appState.updates.installPhase == .installing {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text(appState.updates.installPhase == .downloading ? "Downloading…" : "Installing…")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let version = appState.updates.availableVersion {
+                    // Passive capsule; one click downloads, verifies,
+                    // installs and relaunches — no dialogs ever.
+                    Button {
+                        appState.updates.installUpdate()
+                    } label: {
+                        Label("Update to \(version)", systemImage: "arrow.down.circle.fill")
                             .font(.callout.weight(.medium))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
                             .background(.green.opacity(0.15), in: Capsule())
                             .foregroundStyle(.green)
                     }
-                    .help("A new version is ready on GitHub — click to download. No rush.")
+                    .buttonStyle(.plain)
+                    .help("One click: downloads the new version, verifies its signature, installs it and relaunches. No rush.")
                 } else if let result = appState.updates.manualResult {
                     Text(verbatim: result)
                         .font(.caption)

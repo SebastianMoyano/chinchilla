@@ -36,6 +36,7 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 24) {
                 header
                 SmartScanCard(usage: $usage)
+                MemoryCard()
                 TabSaverCard()
                 AutoCleanCard()
                 HStack(alignment: .top, spacing: 16) {

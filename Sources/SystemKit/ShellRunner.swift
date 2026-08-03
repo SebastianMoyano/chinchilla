@@ -20,13 +20,31 @@ public enum ShellRunner {
         _ args: [String] = [],
         timeout: Duration = .seconds(120)
     ) async throws -> String {
+        try await launch(tool, args, timeout: timeout, mergeStderr: false)
+    }
+
+    /// Like `run`, but stderr is merged into the returned output — for tools
+    /// like codesign that print their report to stderr.
+    public static func runMerged(
+        _ tool: String,
+        _ args: [String] = [],
+        timeout: Duration = .seconds(120)
+    ) async throws -> String {
+        try await launch(tool, args, timeout: timeout, mergeStderr: true)
+    }
+
+    private static func launch(
+        _ tool: String, _ args: [String], timeout: Duration, mergeStderr: Bool
+    ) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
         process.arguments = args
         let outPipe = Pipe()
-        let errPipe = Pipe()
+        // When merging, stderr shares outPipe; a separate unused Pipe would
+        // never reach EOF and deadlock the drain.
+        let errPipe = mergeStderr ? nil : Pipe()
         process.standardOutput = outPipe
-        process.standardError = errPipe
+        process.standardError = errPipe ?? outPipe
         try process.run()
 
         // Process isn't Sendable; we only ever call terminate() from other
@@ -52,7 +70,7 @@ public enum ShellRunner {
     }
 
     private static func readToEnd(
-        _ process: Process, _ outPipe: Pipe, _ errPipe: Pipe
+        _ process: Process, _ outPipe: Pipe, _ errPipe: Pipe?
     ) async throws -> String {
         nonisolated(unsafe) let child = process
         return try await withCheckedThrowingContinuation { continuation in
@@ -65,8 +83,10 @@ public enum ShellRunner {
             DispatchQueue.global(qos: .utility).async(group: drains) {
                 outData = outPipe.fileHandleForReading.readDataToEndOfFile()
             }
-            DispatchQueue.global(qos: .utility).async(group: drains) {
-                errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            if let errPipe {
+                DispatchQueue.global(qos: .utility).async(group: drains) {
+                    errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                }
             }
             drains.notify(queue: .global(qos: .utility)) {
                 child.waitUntilExit()
@@ -75,7 +95,11 @@ public enum ShellRunner {
                 if child.terminationStatus == 0 {
                     continuation.resume(returning: out)
                 } else {
-                    continuation.resume(throwing: ShellError(exitCode: child.terminationStatus, stderr: err))
+                    // When stderr was merged, the error detail lives in `out`.
+                    continuation.resume(throwing: ShellError(
+                        exitCode: child.terminationStatus,
+                        stderr: err.isEmpty ? out : err
+                    ))
                 }
             }
         }

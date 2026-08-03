@@ -66,6 +66,7 @@ final class AppState {
     let tabSaver = TabSaverModel()
     let updates = UpdateModel()
     let snapshots = SnapshotModel()
+    let memory = MemoryModel()
 
     // MARK: Smart Scan — one click, three sweeps, one number.
 

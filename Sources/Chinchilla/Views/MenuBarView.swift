@@ -88,12 +88,21 @@ struct MenuBarView: View {
                 Text(verbatim: "v\(appState.updates.currentVersion)")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
-                if let version = appState.updates.availableVersion {
-                    Link(destination: appState.updates.releaseURL) {
-                        Label("Get \(version)", systemImage: "arrow.down.circle.fill")
+                if appState.updates.installPhase == .downloading
+                    || appState.updates.installPhase == .installing {
+                    ProgressView().controlSize(.mini)
+                    Text("Updating…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if let version = appState.updates.availableVersion {
+                    Button {
+                        appState.updates.installUpdate()
+                    } label: {
+                        Label("Update to \(version)", systemImage: "arrow.down.circle.fill")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.green)
                     }
+                    .buttonStyle(.plain)
                 } else if let result = appState.updates.manualResult {
                     Text(verbatim: result)
                         .font(.caption)

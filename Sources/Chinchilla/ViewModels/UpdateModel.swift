@@ -1,5 +1,7 @@
 import SwiftUI
 import Observation
+import AppKit
+import SystemKit
 
 /// Passive update check against GitHub Releases — no frameworks, no dialogs.
 /// When a newer version exists, MainWindow shows a quiet capsule up top that
@@ -13,8 +15,23 @@ final class UpdateModel {
 
     var availableVersion: String?
     var releaseURL = URL(string: "https://github.com/\(repo)/releases/latest")!
+    /// Direct DMG asset of the latest release, when present.
+    var dmgURL: URL?
     /// Transient feedback for the manual "Check for Updates…" menu item.
     var manualResult: String?
+
+    enum InstallPhase: Equatable {
+        case idle
+        case downloading
+        case installing
+        case failed(String)
+
+        var isFailure: Bool {
+            if case .failed = self { return true }
+            return false
+        }
+    }
+    var installPhase: InstallPhase = .idle
 
     var currentVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
@@ -38,8 +55,13 @@ final class UpdateModel {
 
     private func check(manual: Bool) async {
         struct Release: Decodable {
+            struct Asset: Decodable {
+                let name: String
+                let browser_download_url: String
+            }
             let tag_name: String
             let html_url: String
+            let assets: [Asset]
         }
         do {
             var request = URLRequest(
@@ -57,6 +79,9 @@ final class UpdateModel {
                 : release.tag_name
             if Self.isNewer(latest, than: currentVersion) {
                 releaseURL = URL(string: release.html_url) ?? releaseURL
+                dmgURL = release.assets
+                    .first { $0.name.hasSuffix(".dmg") }
+                    .flatMap { URL(string: $0.browser_download_url) }
                 withAnimation { availableVersion = latest }
                 if manual { manualResult = nil }
             } else if manual {
@@ -67,6 +92,100 @@ final class UpdateModel {
                 manualResult = String(localized: "Couldn't check for updates.")
             }
         }
+    }
+
+    // MARK: - One-click self-update
+
+    /// Downloads the new DMG, verifies its Developer ID signature and team,
+    /// swaps the app bundle in place and relaunches. Falls back to opening
+    /// the release page on any failure.
+    static let expectedTeamID = "8457F927YF"
+
+    func installUpdate() {
+        guard installPhase == .idle || installPhase.isFailure else { return }
+        guard let dmgURL else {
+            NSWorkspace.shared.open(releaseURL)
+            return
+        }
+        installPhase = .downloading
+        Task {
+            do {
+                try await performInstall(from: dmgURL)
+                // performInstall relaunches and terminates; nothing after this.
+            } catch {
+                installPhase = .failed(String(localized: "Update failed — opening the download page instead."))
+                NSWorkspace.shared.open(releaseURL)
+            }
+        }
+    }
+
+    private struct UpdateError: Error {
+        let reason: String
+    }
+
+    private func performInstall(from url: URL) async throws {
+        // 1. Download.
+        let (tempFile, _) = try await URLSession.shared.download(from: url)
+        let dmgPath = tempFile.deletingPathExtension().appendingPathExtension("dmg")
+        try? FileManager.default.removeItem(at: dmgPath)
+        try FileManager.default.moveItem(at: tempFile, to: dmgPath)
+        installPhase = .installing
+
+        // 2. Mount.
+        let attachOutput = try await ShellRunner.run(
+            "/usr/bin/hdiutil",
+            ["attach", dmgPath.path, "-nobrowse", "-readonly", "-plist"],
+            timeout: .seconds(60)
+        )
+        guard let mountPoint = Self.parseMountPoint(attachOutput) else {
+            throw UpdateError(reason: "no mount point")
+        }
+        defer {
+            Task {
+                _ = try? await ShellRunner.run(
+                    "/usr/bin/hdiutil", ["detach", mountPoint, "-force"], timeout: .seconds(30)
+                )
+            }
+        }
+
+        // 3. Locate and VERIFY the new app before touching anything.
+        let newApp = mountPoint + "/Chinchilla.app"
+        guard FileManager.default.fileExists(atPath: newApp) else {
+            throw UpdateError(reason: "app missing from DMG")
+        }
+        _ = try await ShellRunner.run(
+            "/usr/bin/codesign", ["--verify", "--deep", "--strict", newApp], timeout: .seconds(60)
+        )
+        let signInfo = try await ShellRunner.runMerged(
+            "/usr/bin/codesign", ["-dv", "--verbose=2", newApp], timeout: .seconds(30)
+        )
+        guard signInfo.contains("TeamIdentifier=\(Self.expectedTeamID)") else {
+            throw UpdateError(reason: "unexpected signing team")
+        }
+
+        // 4. Swap in place (deleting a running bundle is fine — the executable
+        //    stays mapped) and relaunch.
+        let target = Bundle.main.bundleURL
+        guard target.pathExtension == "app" else {
+            throw UpdateError(reason: "not running from an app bundle")
+        }
+        try FileManager.default.removeItem(at: target)
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: newApp), to: target)
+
+        let relauncher = Process()
+        relauncher.executableURL = URL(fileURLWithPath: "/bin/sh")
+        relauncher.arguments = ["-c", "sleep 1; /usr/bin/open \"\(target.path)\""]
+        try relauncher.run()
+        await NSApplication.shared.terminate(nil)
+    }
+
+    /// hdiutil -plist output → first mount point.
+    static func parseMountPoint(_ plistXML: String) -> String? {
+        guard let data = plistXML.data(using: .utf8),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil),
+              let dict = plist as? [String: Any],
+              let entities = dict["system-entities"] as? [[String: Any]] else { return nil }
+        return entities.compactMap { $0["mount-point"] as? String }.first
     }
 
     static func isNewer(_ candidate: String, than current: String) -> Bool {

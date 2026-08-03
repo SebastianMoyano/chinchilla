@@ -161,6 +161,12 @@
 "Couldn't check for updates." = "No se pudo comprobar si hay actualizaciones.";
 "Sponsor" = "Apoyar";
 "Get %@" = "Bajar %@";
+"Update to %@" = "Actualizar a %@";
+"Updating…" = "Actualizando…";
+"Downloading…" = "Descargando…";
+"Installing…" = "Instalando…";
+"One click: downloads the new version, verifies its signature, installs it and relaunches. No rush." = "Un clic: descarga la versión nueva, verifica su firma, la instala y relanza. Sin apuro.";
+"Update failed — opening the download page instead." = "La actualización falló — abriendo la página de descarga.";
 "Check for updates" = "Buscar actualizaciones";
 "Quit" = "Salir";
 "Enjoying Chinchilla? Support its development ♥" = "¿Te sirve Chinchilla? Apoya su desarrollo ♥";
@@ -206,6 +212,23 @@
 "If the same page is open more than once (Chrome and Safari), keeps the first one and closes the copies." = "Si la misma página está abierta más de una vez (Chrome y Safari), conserva la primera y cierra las copias.";
 "Chinchilla can tell your browser to put tabs you're not looking at to sleep: they free their memory and reload when you click them. Nothing closes, nothing is lost — your Mac just breathes easier." = "Chinchilla puede pedirle a tu navegador que duerma las pestañas que no estás mirando: liberan su memoria y se recargan al hacerles clic. No se cierra nada, no se pierde nada — tu Mac simplemente respira mejor.";
 "Takes effect after restarting the browser. It will say \"Managed by your organization\" while this is on — that message is this switch, and it disappears if you turn it off (anytime, from the Dashboard)." = "Aplica al reiniciar el navegador. Dirá \"Administrado por tu organización\" mientras esté activo — ese mensaje es este switch, y desaparece si lo apagas (cuando quieras, desde el Panel).";
+
+/* Memory Doctor (0.4.0) */
+"Memory: all good" = "Memoria: todo bien";
+"Memory: getting tight" = "Memoria: algo justa";
+"Memory: struggling — this is why it feels slow" = "Memoria: saturada — por esto se siente lento";
+"Memory" = "Memoria";
+"Your Mac has all the memory it needs right now." = "Tu Mac tiene toda la memoria que necesita ahora mismo.";
+"It's squeezing memory to keep up. If things feel slow, close a big app below." = "Está exprimiendo la memoria para alcanzar. Si lo sientes lento, cierra una app grande de la lista.";
+"There isn't enough memory, so your Mac is using the disk as a slow backup. Close the biggest apps below." = "No alcanza la memoria y tu Mac está usando el disco como respaldo lento. Cierra las apps más grandes de la lista.";
+"Tap refresh to check." = "Toca actualizar para revisar.";
+"Using the most memory right now" = "Usando más memoria ahora mismo";
+"Close" = "Cerrar";
+"Quits the app the normal way — it can ask you to save first." = "Cierra la app de forma normal — puede pedirte guardar antes.";
+"Your browser is the biggest memory user. \"Put background tabs to sleep\" (below) helps a lot without closing anything." = "Tu navegador es el que más memoria usa. \"Dormir las pestañas en segundo plano\" (aquí abajo) ayuda mucho sin cerrar nada.";
+"Your Mac is borrowing disk space as emergency memory (swap). Closing apps you're not using right now gives the biggest relief." = "Tu Mac está pidiendo prestado espacio del disco como memoria de emergencia (swap). Cerrar las apps que no estás usando es el mayor alivio.";
+"With 8 GB of memory, 2–3 big apps at a time is the sweet spot. Check what launches automatically in Startup." = "Con 8 GB de memoria, 2–3 apps grandes a la vez es el punto justo. Revisa qué se lanza solo en Inicio.";
+"Nothing to free: macOS deliberately keeps memory busy to make your apps faster. \"Used\" memory is not a problem — pressure is, and yours is fine." = "No hay nada que liberar: macOS mantiene la memoria ocupada a propósito para que tus apps sean más rápidas. La memoria \"usada\" no es un problema — la presión sí, y la tuya está bien.";
 
 /* Startup */
 "Startup" = "Inicio";
