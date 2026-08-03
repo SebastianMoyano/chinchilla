@@ -4,43 +4,43 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
-	<key>CFBundleIdentifier</key>
-	<string>com.sebastian.chinchilla</string>
-	<key>CFBundleName</key>
-	<string>Chinchilla</string>
 	<key>CFBundleDisplayName</key>
 	<string>Chinchilla</string>
 	<key>CFBundleExecutable</key>
 	<string>Chinchilla</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>0.10.2</string>
-	<key>CFBundleVersion</key>
-	<string>26</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.sebastian.chinchilla</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>
 		<string>es</string>
 	</array>
-	<key>LSMinimumSystemVersion</key>
-	<string>15.0</string>
-	<key>NSHighResolutionCapable</key>
-	<true/>
+	<key>CFBundleName</key>
+	<string>Chinchilla</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.11.0</string>
+	<key>CFBundleVersion</key>
+	<string>27</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Sebastián</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Chinchilla finds FCast receivers (TVs) on your network to cast your screen and media.</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Chinchilla runs maintenance commands that may require administrator privileges.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_fcast._tcp</string>
 		<string>_googlecast._tcp</string>
 	</array>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>Chinchilla runs maintenance commands that may require administrator privileges.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Sebastián</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Chinchilla finds FCast receivers (TVs) on your network to cast your screen and media.</string>
 </dict>
 </plist>
