@@ -15,6 +15,64 @@ final class TabSaverModel {
     var closingTabs = false
     var lastReport: String?
 
+    /// User-chosen performance mode: "auto" adapts to the machine.
+    enum PerfMode: String, CaseIterable {
+        case auto, light, balanced, full
+    }
+    static let perfModeKey = "tabSaver.perfMode"
+
+    var perfMode: PerfMode {
+        get {
+            PerfMode(rawValue: UserDefaults.standard.string(forKey: Self.perfModeKey) ?? "auto") ?? .auto
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: Self.perfModeKey)
+            if anySaverOn { applyCurrentLevel() }
+        }
+    }
+
+    /// Auto = judge the machine honestly: ≤8 GB of RAM or non-normal memory
+    /// pressure → light; otherwise balanced. Re-evaluated on refresh and by
+    /// the Everyday-mode watchdog, so a Mac having a bad day gets relief.
+    static func autoLevel() -> BrowserTuner.BrowserPerfLevel {
+        var size: UInt64 = 0
+        var length = MemoryLayout<UInt64>.size
+        sysctlbyname("hw.memsize", &size, &length, nil, 0)
+        if size <= 8 << 30 { return .light }
+        return SystemSampler.memoryPressure() == .normal ? .balanced : .light
+    }
+
+    var resolvedLevel: BrowserTuner.BrowserPerfLevel {
+        switch perfMode {
+        case .auto: Self.autoLevel()
+        case .light: .light
+        case .balanced: .balanced
+        case .full: .full
+        }
+    }
+
+    /// Rewrites the policies for the current mode; called when the mode
+    /// changes and by the watchdog when auto's answer changes.
+    static let lastAppliedKey = "tabSaver.lastAppliedLevel"
+
+    func applyCurrentLevel() {
+        let level = resolvedLevel
+        for state in policyBrowsers {
+            BrowserTuner.setPerformanceLevel(level, for: state.browser)
+        }
+        UserDefaults.standard.set(level.rawValue, forKey: Self.lastAppliedKey)
+        refresh()
+    }
+
+    /// Cheap no-op unless auto's answer actually changed — called by the
+    /// Everyday-mode watchdog every few minutes.
+    func reevaluateAutoIfNeeded() {
+        guard anySaverOn, perfMode == .auto else { return }
+        let level = Self.autoLevel()
+        guard level.rawValue != UserDefaults.standard.string(forKey: Self.lastAppliedKey) else { return }
+        applyCurrentLevel()
+    }
+
     /// Chromium browsers installed that support the Memory Saver policy.
     var policyBrowsers: [BrowserState] {
         states.filter { $0.browser.policyDomain != nil }
@@ -36,9 +94,10 @@ final class TabSaverModel {
     }
 
     /// One switch for all installed Chromium browsers ("simple form").
+    /// On = apply the current performance level; off = remove every policy.
     func setAllMemorySavers(_ enabled: Bool) {
         for state in policyBrowsers {
-            BrowserTuner.setMemorySaver(enabled, for: state.browser)
+            BrowserTuner.setPerformanceLevel(enabled ? resolvedLevel : nil, for: state.browser)
         }
         refresh()
     }

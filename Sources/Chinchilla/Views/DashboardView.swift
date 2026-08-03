@@ -1,5 +1,6 @@
 import SwiftUI
 import CleanCore
+import SystemKit
 
 struct DiskUsage: Sendable {
     var total: Int64 = 0
@@ -294,7 +295,30 @@ struct TabSaverCard: View {
                                 .foregroundStyle(.tertiary)
                         }
                         if model.anySaverOn {
-                            Text("Verify it in chrome://settings/performance — \"Memory Saver\" should be on. Depending on the Chrome version it may also mention \"Managed by your organization\"; that's this switch, and turning it off removes it.")
+                            HStack(spacing: 8) {
+                                Text("Level")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Picker("", selection: Binding(
+                                    get: { model.perfMode },
+                                    set: { model.perfMode = $0 }
+                                )) {
+                                    Text("Auto").tag(TabSaverModel.PerfMode.auto)
+                                    Text("Light").tag(TabSaverModel.PerfMode.light)
+                                    Text("Balanced").tag(TabSaverModel.PerfMode.balanced)
+                                    Text("Full speed").tag(TabSaverModel.PerfMode.full)
+                                }
+                                .pickerStyle(.segmented)
+                                .fixedSize()
+                                .labelsHidden()
+                                .help("Light: maximum tab savings, aggressive energy saver, no page preloading — for Macs that struggle. Balanced: sensible middle. Full speed: keeps preloading and skips the energy saver — for Macs with headroom. Auto picks from your RAM and live memory pressure, and adapts while Everyday mode runs.")
+                            }
+                            if model.perfMode == .auto {
+                                Text("Auto chose \"\(levelName(model.resolvedLevel))\" for this Mac (RAM + current memory pressure). It adapts over time with Everyday mode.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Text("Verify in chrome://settings/performance (Memory Saver on). Chrome may mention \"Managed by your organization\" — that's this switch, removable anytime.")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
@@ -347,6 +371,14 @@ struct TabSaverCard: View {
             .frame(width: 20, height: 20)
             .background(.indigo.opacity(0.15), in: Circle())
             .foregroundStyle(.indigo)
+    }
+
+    private func levelName(_ level: BrowserTuner.BrowserPerfLevel) -> String {
+        switch level {
+        case .light: String(localized: "Light")
+        case .balanced: String(localized: "Balanced")
+        case .full: String(localized: "Full speed")
+        }
     }
 }
 

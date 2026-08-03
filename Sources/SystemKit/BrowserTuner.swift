@@ -58,34 +58,80 @@ public enum BrowserTuner {
         }
     }
 
-    // MARK: - Memory Saver policy
+    // MARK: - Performance level policies
 
-    /// MemorySaverModeSavings: 0 = off, 1 = moderate, 2 = maximum.
-    /// We use 1 (moderate) — most of the win without aggressive tab reloads.
-    /// HighEfficiencyModeEnabled is the older boolean spelling, kept for
-    /// Chromium builds that still read it. Unknown keys are ignored.
+    /// Three real levers Chrome exposes as (recommended-level) policies:
+    /// - MemorySaverModeSavings: 0 off · 1 moderate · 2 maximum savings
+    /// - BatterySaverModeAvailability: 0 off · 1 at ≤20% battery · 2 whenever on battery
+    /// - NetworkPredictionOptions: 0 allow preloading · 2 never preload
+    /// HighEfficiencyModeEnabled is the older boolean spelling of Memory
+    /// Saver, kept for Chromium builds that still read it.
+    public enum BrowserPerfLevel: String, Sendable, CaseIterable {
+        /// Struggling machine: maximum tab savings, aggressive energy saver,
+        /// no page preloading (spends CPU/RAM/network on guesses).
+        case light
+        /// Sensible default: moderate savings, energy saver on low battery,
+        /// preloading allowed.
+        case balanced
+        /// Plenty of headroom: keep the browser snappy — moderate memory
+        /// saver still on (it helps everyone), preloading fully allowed.
+        case full
+
+        var memorySaver: Int {
+            switch self {
+            case .light: 2
+            case .balanced, .full: 1
+            }
+        }
+
+        var batterySaver: Int {
+            switch self {
+            case .light: 2
+            case .balanced: 1
+            case .full: 0
+            }
+        }
+
+        var networkPrediction: Int {
+            switch self {
+            case .light: 2
+            case .balanced, .full: 0
+            }
+        }
+    }
+
     public static func isMemorySaverManaged(_ browser: TunableBrowser) -> Bool {
         guard let domain = browser.policyDomain else { return false }
         return CFPreferencesCopyAppValue("MemorySaverModeSavings" as CFString, domain as CFString) != nil
     }
 
-    public static func setMemorySaver(_ enabled: Bool, for browser: TunableBrowser) {
+    /// Applies a performance level (nil = remove all our policies).
+    public static func setPerformanceLevel(_ level: BrowserPerfLevel?, for browser: TunableBrowser) {
         guard let domain = browser.policyDomain else { return }
         let appID = domain as CFString
-        if enabled {
-            CFPreferencesSetAppValue("MemorySaverModeSavings" as CFString, 1 as CFNumber, appID)
+        if let level {
+            CFPreferencesSetAppValue("MemorySaverModeSavings" as CFString, level.memorySaver as CFNumber, appID)
             CFPreferencesSetAppValue("HighEfficiencyModeEnabled" as CFString, kCFBooleanTrue, appID)
+            CFPreferencesSetAppValue("BatterySaverModeAvailability" as CFString, level.batterySaver as CFNumber, appID)
+            CFPreferencesSetAppValue("NetworkPredictionOptions" as CFString, level.networkPrediction as CFNumber, appID)
             if domain == "com.microsoft.Edge" {
                 CFPreferencesSetAppValue("SleepingTabsEnabled" as CFString, kCFBooleanTrue, appID)
             }
         } else {
-            CFPreferencesSetAppValue("MemorySaverModeSavings" as CFString, nil, appID)
-            CFPreferencesSetAppValue("HighEfficiencyModeEnabled" as CFString, nil, appID)
+            for key in ["MemorySaverModeSavings", "HighEfficiencyModeEnabled",
+                        "BatterySaverModeAvailability", "NetworkPredictionOptions"] {
+                CFPreferencesSetAppValue(key as CFString, nil, appID)
+            }
             if domain == "com.microsoft.Edge" {
                 CFPreferencesSetAppValue("SleepingTabsEnabled" as CFString, nil, appID)
             }
         }
         CFPreferencesAppSynchronize(appID)
+    }
+
+    /// Back-compat convenience used by the simple on/off toggle.
+    public static func setMemorySaver(_ enabled: Bool, for browser: TunableBrowser) {
+        setPerformanceLevel(enabled ? .balanced : nil, for: browser)
     }
 
     // MARK: - Duplicate tabs

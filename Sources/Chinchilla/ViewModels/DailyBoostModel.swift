@@ -68,6 +68,9 @@ final class DailyBoostModel {
     }
 
     private func checkPressure() async {
+        // Adapt the browser performance level to how the machine is doing.
+        appState?.tabSaver.reevaluateAutoIfNeeded()
+
         let pressure = SystemSampler.memoryPressure()
         guard pressure == .warning || pressure == .critical else { return }
         let last = UserDefaults.standard.double(forKey: Self.lastAlertKey)

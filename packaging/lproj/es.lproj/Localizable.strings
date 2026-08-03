@@ -242,6 +242,16 @@
 "Tabs you're not looking at free their memory; they reload when you click them. Nothing closes, nothing is lost." = "Las pestañas que no estás mirando liberan su memoria; se recargan al hacerles clic. No se cierra nada, no se pierde nada.";
 "· takes effect after restarting the browser" = "· aplica al reiniciar el navegador";
 "Verify it in chrome://settings/performance — \"Memory Saver\" should be on. Depending on the Chrome version it may also mention \"Managed by your organization\"; that's this switch, and turning it off removes it." = "Verifícalo en chrome://settings/performance — \"Ahorro de memoria\" debería estar activado. Según la versión de Chrome puede además mencionar \"Administrado por tu organización\"; ese mensaje es este switch, y apagarlo lo quita.";
+
+/* Browser performance levels (0.7.0) */
+"Level" = "Nivel";
+"Auto" = "Auto";
+"Light" = "Ligero";
+"Balanced" = "Equilibrado";
+"Full speed" = "Máxima velocidad";
+"Light: maximum tab savings, aggressive energy saver, no page preloading — for Macs that struggle. Balanced: sensible middle. Full speed: keeps preloading and skips the energy saver — for Macs with headroom. Auto picks from your RAM and live memory pressure, and adapts while Everyday mode runs." = "Ligero: máximo ahorro de pestañas, ahorro de energía agresivo y sin precarga de páginas — para Macs que sufren. Equilibrado: punto medio sensato. Máxima velocidad: mantiene la precarga y omite el ahorro de energía — para Macs con holgura. Auto elige según tu RAM y la presión de memoria en vivo, y se adapta mientras corre el Modo diario.";
+"Auto chose \"%@\" for this Mac (RAM + current memory pressure). It adapts over time with Everyday mode." = "Auto eligió \"%@\" para este Mac (RAM + presión de memoria actual). Se adapta con el tiempo junto al Modo diario.";
+"Verify in chrome://settings/performance (Memory Saver on). Chrome may mention \"Managed by your organization\" — that's this switch, removable anytime." = "Verifica en chrome://settings/performance (Ahorro de memoria activado). Chrome puede mencionar \"Administrado por tu organización\" — es este switch, removible cuando quieras.";
 "Close repeated tabs" = "Cerrar pestañas repetidas";
 "Close now" = "Cerrar ahora";
 "If the same page is open more than once (Chrome and Safari), keeps the first one and closes the copies." = "Si la misma página está abierta más de una vez (Chrome y Safari), conserva la primera y cierra las copias.";
