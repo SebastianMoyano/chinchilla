@@ -299,7 +299,9 @@ struct MirrorCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Mirror this screen")
                         .font(.headline)
-                    Text("Your whole desktop, live on the TV — about 1–3 seconds behind. Great for videos, photos and presenting; not for using the TV as an interactive monitor. (TVs buffer before they show anything; that floor is the receiver's, not ours.)")
+                    Text(model.supportsFastMirror && model.mirrorFastPath
+                         ? "Your whole desktop, live on the TV. This Chromecast supports the fast receiver, so the delay is a fraction of a second instead of several — close enough to point at things while you talk."
+                         : "Your whole desktop, live on the TV — about 1–3 seconds behind. Great for videos, photos and presenting; not for using the TV as an interactive monitor. (TVs buffer before they show anything; that floor is the receiver's, not ours.)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -353,6 +355,29 @@ struct MirrorCard: View {
                     .toggleStyle(.checkbox)
                     Spacer()
                 }
+
+                if model.supportsFastMirror {
+                    HStack(spacing: 12) {
+                        Picker("Responsiveness", selection: Binding(
+                            get: { model.mirrorDelayMs },
+                            set: { model.mirrorDelayMs = $0 }
+                        )) {
+                            Text("Smoothest").tag(400)
+                            Text("Balanced").tag(200)
+                            Text("Most responsive").tag(100)
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                        .help("How long the TV holds each frame before showing it. Lower feels more immediate; on a busy Wi-Fi network it can stutter.")
+                        Spacer()
+                    }
+                }
+            }
+
+            if model.mirroring && model.mirrorUsingFallback {
+                Label("This TV wouldn't take the fast stream, so we're using the slower one. Expect a second or two of delay.", systemImage: "tortoise")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if let error = model.mirrorError {

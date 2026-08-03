@@ -79,12 +79,28 @@ final class CastModel {
     var screenPermissionGranted = ScreenRecordingPermission.isGranted
     private let streamer = ScreenStreamer()
 
+    /// Chromecast devices carry a second, much faster receiver — the one
+    /// Chrome uses for "Cast desktop". Nothing extra to install; it just
+    /// negotiates a delay instead of buffering like a media player.
+    var mirrorFastPath = true
+    /// How long the TV holds frames before showing them. Lower is more
+    /// responsive; too low and a jittery Wi-Fi network starts to stutter.
+    var mirrorDelayMs = 400
+    /// Set when the fast path wasn't available and we fell back.
+    var mirrorUsingFallback = false
+    private var fastMirror: CastMirrorSession?
+
     /// Only Chromecast and FCast play HLS; DLNA renderers generally don't.
     var canMirrorToConnectedDevice: Bool {
         switch connected?.kind {
         case .googlecast, .fcast: true
         case .dlna, nil: false
         }
+    }
+
+    /// Chromecast devices have the fast receiver; FCast doesn't.
+    var supportsFastMirror: Bool {
+        if case .googlecast = connected?.kind { true } else { false }
     }
 
     func refreshScreenPermission() {
@@ -105,8 +121,34 @@ final class CastModel {
         }
         mirrorStarting = true
         mirrorError = nil
+        mirrorUsingFallback = false
         Task {
             defer { mirrorStarting = false }
+
+            // Fast path first. If the receiver turns it down we fall back
+            // rather than failing — some Cast devices only speak the slow one.
+            if case .googlecast(let device) = target.kind, mirrorFastPath {
+                let fast = CastMirrorSession(
+                    host: device.host, quality: mirrorQuality, playoutDelayMs: mirrorDelayMs
+                )
+                fast.onStopped = { message in
+                    Task { @MainActor [weak self] in
+                        self?.mirroring = false
+                        if let message { self?.mirrorError = message }
+                    }
+                }
+                do {
+                    try await fast.start()
+                    fastMirror = fast
+                    castingName = String(localized: "Your screen")
+                    mirroring = true
+                    playbackState = 1
+                    return
+                } catch {
+                    mirrorUsingFallback = true
+                }
+            }
+
             do {
                 try server.start()
                 for _ in 0..<40 where server.port == 0 {
@@ -204,7 +246,13 @@ final class CastModel {
         castingName = nil
         playbackState = 0
         let target = connected
+        let fast = fastMirror
+        fastMirror = nil
         Task {
+            if let fast {
+                await fast.stop()
+                return
+            }
             await streamer.stop()
             server.setPrefixRoute("/mirror/", handler: nil)
             server.setStreamRoute("/mirror/live.mp4", handler: nil)

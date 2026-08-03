@@ -1,1 +1,13 @@
 /* English uses the keys themselves; file exists so LaunchServices offers en as a localization. */
+
+/* Low-latency mirroring over Cast Streaming (0.11.0) */
+"Your whole desktop, live on the TV. This Chromecast supports the fast receiver, so the delay is a fraction of a second instead of several — close enough to point at things while you talk." = "Your whole desktop, live on the TV. This Chromecast supports the fast receiver, so the delay is a fraction of a second instead of several — close enough to point at things while you talk.";
+"Responsiveness" = "Responsiveness";
+"Smoothest" = "Smoothest";
+"Balanced" = "Balanced";
+"Most responsive" = "Most responsive";
+"How long the TV holds each frame before showing it. Lower feels more immediate; on a busy Wi-Fi network it can stutter." = "How long the TV holds each frame before showing it. Lower feels more immediate; on a busy Wi-Fi network it can stutter.";
+"This TV wouldn't take the fast stream, so we're using the slower one. Expect a second or two of delay." = "This TV wouldn't take the fast stream, so we're using the slower one. Expect a second or two of delay.";
+"This TV answered but wouldn't accept the video stream." = "This TV answered but wouldn't accept the video stream.";
+"This TV didn't answer the streaming request." = "This TV didn't answer the streaming request.";
+"No display to capture." = "No display to capture.";

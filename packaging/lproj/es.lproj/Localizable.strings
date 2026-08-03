@@ -459,3 +459,15 @@
 /* Latencia y permisos del espejo (0.10.2) */
 "Your whole desktop, live on the TV — about 1–3 seconds behind. Great for videos, photos and presenting; not for using the TV as an interactive monitor. (TVs buffer before they show anything; that floor is the receiver's, not ours.)" = "Todo tu escritorio, en vivo en el TV — con 1 a 3 segundos de retraso. Ideal para videos, fotos y presentar; no para usar el TV como monitor interactivo. (Los TVs guardan buffer antes de mostrar algo; ese piso lo pone el receptor, no nosotros.)";
 "Screen Recording permission is needed — and macOS asks again after every app update" = "Se necesita permiso de Grabación de pantalla — y macOS lo vuelve a pedir tras cada actualización de la app";
+
+/* Espejo de baja latencia por Cast Streaming (0.11.0) */
+"Your whole desktop, live on the TV. This Chromecast supports the fast receiver, so the delay is a fraction of a second instead of several — close enough to point at things while you talk." = "Todo tu escritorio, en vivo en el TV. Este Chromecast admite el receptor rápido, así que el retraso es una fracción de segundo en vez de varios — suficiente para señalar cosas mientras hablas.";
+"Responsiveness" = "Respuesta";
+"Smoothest" = "Más fluido";
+"Balanced" = "Equilibrado";
+"Most responsive" = "Más inmediato";
+"How long the TV holds each frame before showing it. Lower feels more immediate; on a busy Wi-Fi network it can stutter." = "Cuánto retiene el TV cada cuadro antes de mostrarlo. Menos se siente más inmediato; en un Wi-Fi cargado puede entrecortarse.";
+"This TV wouldn't take the fast stream, so we're using the slower one. Expect a second or two of delay." = "Este TV no aceptó el flujo rápido, así que usamos el lento. Espera uno o dos segundos de retraso.";
+"This TV answered but wouldn't accept the video stream." = "Este TV respondió pero no aceptó el flujo de video.";
+"This TV didn't answer the streaming request." = "Este TV no respondió a la solicitud de transmisión.";
+"No display to capture." = "No hay pantalla que capturar.";
