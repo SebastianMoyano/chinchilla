@@ -471,3 +471,11 @@
 "This TV answered but wouldn't accept the video stream." = "Este TV respondió pero no aceptó el flujo de video.";
 "This TV didn't answer the streaming request." = "Este TV no respondió a la solicitud de transmisión.";
 "No display to capture." = "No hay pantalla que capturar.";
+
+/* Uptime: distinguir suspender de reiniciar (0.11.2) */
+"%lld days without a restart — running since %@. Closing the lid or letting it sleep doesn't count; only Restart or Shut Down does. A reboot clears leaked memory — old-fashioned, but it works." = "%1$lld días sin reiniciar — encendido desde el %2$@. Cerrar la tapa o dejarlo suspendido no cuenta; solo Reiniciar o Apagar. Un reinicio libera memoria filtrada — anticuado, pero funciona.";
+"%lld days since the last restart%@ — fine." = "%1$lld días desde el último reinicio%2$@ — bien.";
+" (since %@)" = " (desde el %@)";
+"Closing the lid isn't a restart — the Mac keeps running while it sleeps. A reboot clears leaked memory and often brings the snappiness back. Whenever suits you." = "Cerrar la tapa no es reiniciar — el Mac sigue encendido mientras duerme. Un reinicio libera memoria filtrada y suele devolver la agilidad. Cuando te acomode.";
+"Starting the mirror took too long. Try again." = "El espejo tardó demasiado en iniciar. Inténtalo de nuevo.";
+"%@ didn't respond in time." = "%@ no respondió a tiempo.";

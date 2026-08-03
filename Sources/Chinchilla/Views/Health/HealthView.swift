@@ -65,8 +65,11 @@ struct HealthView: View {
                 unknown: false,
                 title: "Uptime",
                 detail: model.report.uptimeDays < 14
-                    ? String(localized: "\(model.report.uptimeDays) days since the last restart — fine.")
-                    : String(localized: "\(model.report.uptimeDays) days without a restart. A reboot clears leaked memory — old-fashioned, but it works.")
+                    ? String(localized: "\(model.report.uptimeDays) days since the last restart\(model.bootDateSuffix) — fine.")
+                    // Naming the date matters: "29 days" reads as wrong to
+                    // anyone who closes the lid every night and calls that
+                    // turning it off. A date can be checked against memory.
+                    : String(localized: "\(model.report.uptimeDays) days without a restart — running since \(model.bootDateText). Closing the lid or letting it sleep doesn't count; only Restart or Shut Down does. A reboot clears leaked memory — old-fashioned, but it works.")
             )
             checkRow(
                 ok: model.report.zombieCount < 5,

@@ -91,7 +91,7 @@ final class DailyBoostModel {
 
         let content = UNMutableNotificationContent()
         content.title = String(localized: "\(days) days without a restart")
-        content.body = String(localized: "A reboot clears leaked memory and often brings the snappiness back. Old-fashioned, but it works — whenever suits you.")
+        content.body = String(localized: "Closing the lid isn't a restart — the Mac keeps running while it sleeps. A reboot clears leaked memory and often brings the snappiness back. Whenever suits you.")
         try? await UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: "dailyboost.uptime", content: content, trigger: nil)
         )

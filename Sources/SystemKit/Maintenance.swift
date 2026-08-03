@@ -8,6 +8,7 @@ public struct HealthReport: Sendable {
     public var batteryCycles: Int?
     public var batteryHealthPercent: Int?  // raw/design capacity
     public var uptimeDays: Int = 0
+    public var bootDate: Date?
     public var zombieCount: Int = 0
     public var isMDMManaged: Bool?
 
@@ -24,6 +25,17 @@ public enum SystemUptime {
 
     public static func days() -> Int {
         Int(seconds() / 86_400)
+    }
+
+    /// When the Mac actually last booted. Worth showing: "29 days" invites
+    /// "but I restarted it" — a date can be checked against memory, and
+    /// usually reveals that what happened was sleep, not a restart.
+    public static func bootDate() -> Date? {
+        var boottime = timeval()
+        var size = MemoryLayout<timeval>.size
+        guard sysctlbyname("kern.boottime", &boottime, &size, nil, 0) == 0,
+              boottime.tv_sec > 0 else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(boottime.tv_sec))
     }
 }
 
@@ -46,6 +58,7 @@ public enum HealthCheck {
 
         // Local, instant probes while the subprocesses run.
         report.uptimeDays = SystemUptime.days()
+        report.bootDate = SystemUptime.bootDate()
         report.zombieCount = countZombies()
 
         if let output = await diskOutput,

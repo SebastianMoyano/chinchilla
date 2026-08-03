@@ -9,6 +9,16 @@ final class HealthModel {
     var report = HealthReport()
     var loading = false
 
+    /// "since Sunday, 5 July" — the check a person can actually make.
+    var bootDateText: String {
+        guard let date = report.bootDate else { return "" }
+        return date.formatted(.dateTime.weekday(.wide).day().month(.wide))
+    }
+
+    var bootDateSuffix: String {
+        bootDateText.isEmpty ? "" : String(localized: " (since \(bootDateText))")
+    }
+
     // Fix-it kit
     var fixRunning: String?
     var fixResult: String?

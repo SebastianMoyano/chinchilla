@@ -11,3 +11,7 @@
 "This TV answered but wouldn't accept the video stream." = "This TV answered but wouldn't accept the video stream.";
 "This TV didn't answer the streaming request." = "This TV didn't answer the streaming request.";
 "No display to capture." = "No display to capture.";
+
+/* Uptime: telling sleep apart from a restart (0.11.2) */
+"Starting the mirror took too long. Try again." = "Starting the mirror took too long. Try again.";
+"%@ didn't respond in time." = "%@ didn't respond in time.";
