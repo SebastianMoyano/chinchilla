@@ -8,15 +8,16 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var hasFDA = Permissions.hasFullDiskAccess()
 
-    private let stepCount = 4
+    private let stepCount = 5
 
     var body: some View {
         VStack(spacing: 20) {
             Group {
                 switch step {
                 case 0: welcome
-                case 1: fullDiskAccess
-                case 2: tabSaver
+                case 1: dailyBoost
+                case 2: fullDiskAccess
+                case 3: tabSaver
                 default: ready
                 }
             }
@@ -76,6 +77,35 @@ struct OnboardingView: View {
                 }
             }
             .padding(.top, 8)
+        }
+    }
+
+    private var dailyBoost: some View {
+        let boost = appState.dailyBoost
+        return VStack(spacing: 14) {
+            Image(systemName: "bolt.heart.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.green)
+            Text("How do you use your Mac?")
+                .font(.title2.bold())
+            Text("If it's your everyday machine (especially with 8 GB of memory), turn this on and forget about it. Chinchilla will sleep background browser tabs, run a safe clean once a week, and give you a gentle heads-up when memory is the reason things feel slow.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: 420)
+            Toggle(isOn: Binding(
+                get: { boost.isEnabled },
+                set: { boost.toggle($0) }
+            )) {
+                Text("Everyday mode (recommended)")
+                    .font(.callout.weight(.medium))
+            }
+            .toggleStyle(.switch)
+            .tint(.green)
+            Text("Gamer too? Gaming Mode lives in the sidebar for when you play. Everything here can be changed later from the Dashboard.")
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: 380)
         }
     }
 

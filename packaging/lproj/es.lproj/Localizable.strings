@@ -230,6 +230,21 @@
 "With 8 GB of memory, 2–3 big apps at a time is the sweet spot. Check what launches automatically in Startup." = "Con 8 GB de memoria, 2–3 apps grandes a la vez es el punto justo. Revisa qué se lanza solo en Inicio.";
 "Nothing to free: macOS deliberately keeps memory busy to make your apps faster. \"Used\" memory is not a problem — pressure is, and yours is fine." = "No hay nada que liberar: macOS mantiene la memoria ocupada a propósito para que tus apps sean más rápidas. La memoria \"usada\" no es un problema — la presión sí, y la tuya está bien.";
 
+/* Everyday mode (0.5.0) */
+"Everyday mode" = "Modo diario";
+"Everyday mode (recommended)" = "Modo diario (recomendado)";
+"Keeps your Mac feeling quick, automatically. No magic — three real things:" = "Mantiene tu Mac ágil, automáticamente. Sin magia — tres cosas reales:";
+"Browser tabs sleep" = "Pestañas duermen";
+"Weekly safe clean" = "Limpieza semanal";
+"Memory heads-up" = "Aviso de memoria";
+"The heads-up is gentle: at most one notification every 2 hours, only when memory is genuinely struggling." = "El aviso es suave: máximo una notificación cada 2 horas, y solo cuando la memoria de verdad no da más.";
+"How do you use your Mac?" = "¿Cómo usas tu Mac?";
+"If it's your everyday machine (especially with 8 GB of memory), turn this on and forget about it. Chinchilla will sleep background browser tabs, run a safe clean once a week, and give you a gentle heads-up when memory is the reason things feel slow." = "Si es tu máquina de todos los días (sobre todo con 8 GB de memoria), actívalo y olvídate. Chinchilla dormirá las pestañas en segundo plano, hará una limpieza segura una vez a la semana, y te avisará con calma cuando la memoria sea la razón de que se sienta lento.";
+"Gamer too? Gaming Mode lives in the sidebar for when you play. Everything here can be changed later from the Dashboard." = "¿También juegas? El Modo gaming está en la barra lateral para cuando juegues. Todo esto se puede cambiar después desde el Panel.";
+"Your Mac is running low on memory" = "Tu Mac se está quedando sin memoria";
+"%@ is using %@. Open Chinchilla to see what's safe to close." = "%1$@ está usando %2$@. Abre Chinchilla para ver qué es seguro cerrar.";
+"Open Chinchilla to see what's safe to close." = "Abre Chinchilla para ver qué es seguro cerrar.";
+
 /* Startup */
 "Startup" = "Inicio";
 "Apps that open at login are managed by macOS." = "Las apps que se abren al iniciar sesión las gestiona macOS.";

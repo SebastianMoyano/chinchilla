@@ -38,6 +38,14 @@ struct MenuBarView: View {
             Divider()
 
             Toggle(isOn: Binding(
+                get: { appState.dailyBoost.isEnabled },
+                set: { appState.dailyBoost.toggle($0) }
+            )) {
+                Label("Everyday mode", systemImage: "bolt.heart.fill")
+            }
+            .toggleStyle(.switch)
+
+            Toggle(isOn: Binding(
                 get: { appState.gaming.isActive },
                 set: { on in on ? appState.gaming.activate() : appState.gaming.deactivate() }
             )) {

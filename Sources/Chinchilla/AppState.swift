@@ -67,6 +67,12 @@ final class AppState {
     let updates = UpdateModel()
     let snapshots = SnapshotModel()
     let memory = MemoryModel()
+    let dailyBoost = DailyBoostModel()
+
+    init() {
+        dailyBoost.appState = self
+        dailyBoost.startIfEnabled()
+    }
 
     // MARK: Smart Scan — one click, three sweeps, one number.
 
