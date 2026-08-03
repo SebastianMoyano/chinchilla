@@ -45,11 +45,34 @@ public final class CastHTTPServer: @unchecked Sendable {
         return "/media/\(token)"
     }
 
-    /// LAN IPv4 of the Mac (en0 preferred) for building URLs the TV can reach.
+    /// LAN IPv4 the TV can actually reach. When the target's address is
+    /// known, prefer the local interface on the SAME /24 — with a VPN,
+    /// Docker bridge or second adapter active, en0 isn't always the right
+    /// answer and the TV would fail to fetch.
+    public static func lanAddress(reachableFrom target: String? = nil) -> String? {
+        let candidates = allAddresses()
+        if let target, let targetPrefix = subnetPrefix(of: target),
+           let match = candidates.first(where: { subnetPrefix(of: $0.ip) == targetPrefix }) {
+            return match.ip
+        }
+        return (candidates.first { $0.name == "en0" } ?? candidates.first)?.ip
+    }
+
+    static func subnetPrefix(of ip: String) -> String? {
+        let parts = ip.split(separator: ".")
+        guard parts.count == 4 else { return nil }
+        return parts.prefix(3).joined(separator: ".")
+    }
+
+    /// Legacy alias kept for call sites that don't know the target yet.
     public static func lanAddress() -> String? {
+        lanAddress(reachableFrom: nil)
+    }
+
+    static func allAddresses() -> [(name: String, ip: String)] {
         var addresses: [(name: String, ip: String)] = []
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return nil }
+        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return [] }
         defer { freeifaddrs(ifaddr) }
         var pointer: UnsafeMutablePointer<ifaddrs>? = first
         while let current = pointer {
@@ -63,7 +86,7 @@ public final class CastHTTPServer: @unchecked Sendable {
                               &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 else { continue }
             addresses.append((String(cString: current.pointee.ifa_name), String(cString: host)))
         }
-        return (addresses.first { $0.name == "en0" } ?? addresses.first)?.ip
+        return addresses
     }
 
     // MARK: - Request handling

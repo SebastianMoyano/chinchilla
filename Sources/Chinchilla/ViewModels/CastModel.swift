@@ -47,6 +47,9 @@ final class CastModel {
     var playbackDuration: Double = 0
     var volume: Double = 1
     var castingName: String?
+    /// Shown in the UI so "which address is my Mac serving from?" is never
+    /// a mystery (and to make the manual-IP field's purpose obvious).
+    var macAddressForDisplay: String? { CastHTTPServer.lanAddress(reachableFrom: targetHost) }
     var lastError: String?
     var firewallHint = false
 
@@ -177,6 +180,23 @@ final class CastModel {
         }
     }
 
+    /// IP of the connected TV, used to pick the local interface that can
+    /// actually reach it (VPNs and virtual adapters break naive guesses).
+    private var targetHost: String? {
+        switch connected?.kind {
+        case .dlna(let renderer): renderer.avTransportURL.host
+        case .fcast(let device):
+            if case .hostPort(let host, _) = device.endpoint {
+                switch host {
+                case .ipv4(let address): "\(address)"
+                case .name(let name, _): name
+                default: nil
+                }
+            } else { nil }
+        case nil: nil
+        }
+    }
+
     // MARK: Casting files
 
     func pickAndCastFile() {
@@ -196,7 +216,7 @@ final class CastModel {
             lastError = String(localized: "Couldn't start the local server.")
             return
         }
-        guard let ip = CastHTTPServer.lanAddress() else {
+        guard let ip = CastHTTPServer.lanAddress(reachableFrom: targetHost) else {
             lastError = String(localized: "No network address found — are you on Wi-Fi?")
             return
         }

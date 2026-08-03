@@ -124,10 +124,10 @@ struct CastView: View {
             }
 
             HStack(spacing: 8) {
-                Text("Connect by IP:")
+                Text("Connect to a TV by IP:")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("192.168.1.50", text: $manualIP)
+                TextField("TV's IP address", text: $manualIP)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 140)
                     .onSubmit { connectManual(model) }
@@ -136,7 +136,13 @@ struct CastView: View {
                     .disabled(manualIP.isEmpty)
                 Spacer()
             }
-            .help("For FCast receivers on networks where automatic discovery is blocked.")
+            .help("The TV's address, for FCast receivers on networks where automatic discovery is blocked.")
+
+            if let mac = model.macAddressForDisplay {
+                Text("This Mac serves from \(mac) — the TV must be able to reach that address.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
 
             if let error = model.lastError {
                 Text(verbatim: error)

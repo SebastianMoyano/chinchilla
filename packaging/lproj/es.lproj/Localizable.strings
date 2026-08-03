@@ -430,3 +430,9 @@
 "Install \"FCast Receiver\" from the Play Store and open it for the FCast path (better controls and, later, screen mirroring)." = "Instala \"FCast Receiver\" desde la Play Store y ábrela para la vía FCast (mejores controles y, más adelante, espejo de pantalla).";
 "Screen mirroring today" = "Espejo de pantalla hoy";
 "Honest tip while our mirroring is in the oven: Samsung and LG TVs have AirPlay 2 built in — macOS can already mirror or extend to them natively from Control Center → Screen Mirroring." = "Consejo honesto mientras nuestro espejo está en el horno: los TVs Samsung y LG traen AirPlay 2 — macOS ya puede duplicar o extender hacia ellos de forma nativa desde Centro de control → Duplicar pantalla.";
+
+/* Cast IP clarity (0.9.2) */
+"Connect to a TV by IP:" = "Conectar a un TV por IP:";
+"TV's IP address" = "IP del TV";
+"The TV's address, for FCast receivers on networks where automatic discovery is blocked." = "La dirección del TV, para receptores FCast en redes donde el descubrimiento automático está bloqueado.";
+"This Mac serves from %@ — the TV must be able to reach that address." = "Este Mac sirve desde %@ — el TV debe poder alcanzar esa dirección.";
