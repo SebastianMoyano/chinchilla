@@ -68,6 +68,7 @@ struct MainWindow: View {
         case .gaming: GamingModeView()
         case .startup: StartupView()
         case .health: HealthView()
+        case .cast: CastView()
         case .devTools: DevToolsView()
         }
     }

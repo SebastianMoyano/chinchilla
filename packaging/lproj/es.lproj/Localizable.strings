@@ -394,3 +394,24 @@
 "that's us" = "somos nosotros";
 "This is Chinchilla itself (weekly clean / Everyday mode). It's managed from the Dashboard toggles — locked here so it can't be removed by accident." = "Esto es la propia Chinchilla (limpieza semanal / Modo diario). Se controla con los switches del Panel — aquí está bloqueado para que no se quite sin querer.";
 "This is Chinchilla itself — use the Dashboard toggles instead." = "Esto es la propia Chinchilla — usa los switches del Panel.";
+
+/* Cast (0.9.0) */
+"Cast" = "Enviar a TV";
+"TVs on your network" = "TVs en tu red";
+"Searching for FCast receivers… Make sure the FCast Receiver app is OPEN on your TV (see the guide below) and both are on the same Wi-Fi." = "Buscando receptores FCast… Asegúrate de que la app FCast Receiver esté ABIERTA en tu TV (mira la guía abajo) y que ambos estén en la misma Wi-Fi.";
+"Connected" = "Conectado";
+"Connect" = "Conectar";
+"Disconnect" = "Desconectar";
+"Reconnect" = "Reconectar";
+"Local network access is off" = "Acceso a la red local desactivado";
+"Chinchilla needs it to find TVs on your network. Enable it and reopen this section." = "Chinchilla lo necesita para encontrar TVs en tu red. Actívalo y vuelve a abrir esta sección.";
+"Now casting" = "Enviando ahora";
+"Cast something" = "Envía algo";
+"Cast a file…" = "Enviar un archivo…";
+"The TV connected but never fetched the video — the macOS firewall may be blocking Chinchilla. Check System Settings → Network → Firewall." = "El TV se conectó pero nunca pidió el video — el firewall de macOS puede estar bloqueando Chinchilla. Revisa Ajustes → Red → Firewall.";
+"Get your TV ready" = "Prepara tu TV";
+"Install \"FCast Receiver\" from the Play Store on the TV, open it, and it will appear above." = "Instala \"FCast Receiver\" desde la Play Store en el TV, ábrela, y aparecerá arriba.";
+"Honest tip: your TV has AirPlay 2 built in — for screen work, macOS can already mirror/extend to it natively (Control Center → Screen Mirroring). FCast receivers exist for these TVs but installing them is clunky." = "Consejo honesto: tu TV ya trae AirPlay 2 — para pantalla, macOS puede duplicar/extender de forma nativa (Centro de control → Duplicar pantalla). Existen receptores FCast para estos TVs pero instalarlos es engorroso.";
+"Everything here is free and account-less: your Mac serves the media directly to the TV over your Wi-Fi. Nothing goes through the internet." = "Todo esto es gratis y sin cuentas: tu Mac sirve el contenido directo al TV por tu Wi-Fi. Nada pasa por internet.";
+"Couldn't start the local server." = "No se pudo iniciar el servidor local.";
+"No network address found — are you on Wi-Fi?" = "No se encontró dirección de red — ¿estás conectado a Wi-Fi?";

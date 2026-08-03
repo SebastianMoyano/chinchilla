@@ -8,13 +8,15 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Chinchilla",
-            dependencies: ["CleanCore", "DiskScanKit", "SystemKit"]
+            dependencies: ["CleanCore", "DiskScanKit", "SystemKit", "CastKit"]
         ),
         .target(name: "CleanCore", dependencies: ["SystemKit", "DiskScanKit"]),
         .target(name: "DiskScanKit"),
         .target(name: "SystemKit"),
+        .target(name: "CastKit", dependencies: ["DiskScanKit"]),
         .testTarget(name: "CleanCoreTests", dependencies: ["CleanCore"]),
         .testTarget(name: "DiskScanKitTests", dependencies: ["DiskScanKit"]),
         .testTarget(name: "SystemKitTests", dependencies: ["SystemKit"]),
+        .testTarget(name: "CastKitTests", dependencies: ["CastKit"]),
     ]
 )

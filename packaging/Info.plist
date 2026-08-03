@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.8.6</string>
+	<string>0.9.0</string>
 	<key>CFBundleVersion</key>
-	<string>18</string>
+	<string>19</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleLocalizations</key>
@@ -33,6 +33,12 @@
 	<string>public.app-category.utilities</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Sebastián</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Chinchilla finds FCast receivers (TVs) on your network to cast your screen and media.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_fcast._tcp</string>
+	</array>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Chinchilla runs maintenance commands that may require administrator privileges.</string>
 </dict>
