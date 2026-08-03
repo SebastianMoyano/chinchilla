@@ -383,3 +383,8 @@
 
 /* Disk ring (0.8.3) */
 "full" = "lleno";
+
+/* Login item (0.8.4) */
+"Start at login" = "Iniciar al arrancar";
+"Launches Chinchilla when the Mac starts, so the widget, menu bar and Everyday-mode watchdog survive reboots. Also visible in System Settings → Login Items." = "Abre Chinchilla al iniciar el Mac, para que el widget, la barra de menú y el vigilante del Modo diario sobrevivan a los reinicios. Visible también en Ajustes → Ítems de inicio.";
+"Heads-ups are gentle: at most one memory alert every 2 hours (only when it's genuinely struggling), and a restart reminder past 14 days of uptime, at most weekly. Chinchilla starts quietly at login (menu bar only) so this survives reboots — removable in System Settings → Login Items." = "Los avisos son suaves: máximo una alerta de memoria cada 2 horas (solo cuando de verdad no da más), y un recordatorio de reinicio pasados 14 días, máximo semanal. Chinchilla se inicia silenciosa al arrancar (solo barra de menú) para que esto sobreviva a los reinicios — removible en Ajustes → Ítems de inicio.";

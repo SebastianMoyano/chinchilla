@@ -70,6 +70,15 @@ struct MenuBarView: View {
             .toggleStyle(.switch)
             .help("Closing the main window keeps Chinchilla in the menu bar — gaming mode, the widget and the weekly clean stay alive.")
 
+            Toggle(isOn: Binding(
+                get: { LoginItem.isEnabled },
+                set: { LoginItem.set($0) }
+            )) {
+                Label("Start at login", systemImage: "power.circle")
+            }
+            .toggleStyle(.switch)
+            .help("Launches Chinchilla when the Mac starts, so the widget, menu bar and Everyday-mode watchdog survive reboots. Also visible in System Settings → Login Items.")
+
             Divider()
 
             HStack {

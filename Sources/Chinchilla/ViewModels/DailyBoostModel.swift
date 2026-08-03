@@ -29,6 +29,11 @@ final class DailyBoostModel {
 
     func startIfEnabled() {
         guard isEnabled, !AppDelegate.isScheduledRun else { return }
+        // Migration: installs that enabled Everyday mode before 0.8.4 never
+        // got the login item — heal it so reboots stop killing the watchdog.
+        if !LoginItem.isEnabled {
+            LoginItem.set(true)
+        }
         startWatchdog()
     }
 
@@ -42,6 +47,8 @@ final class DailyBoostModel {
             if !appState.schedule.isEnabled {
                 appState.schedule.toggle(true)
             }
+            // The watchdog is only useful if Chinchilla survives reboots.
+            LoginItem.set(true)
             Task {
                 _ = try? await UNUserNotificationCenter.current()
                     .requestAuthorization(options: [.alert, .badge])
@@ -52,6 +59,7 @@ final class DailyBoostModel {
             if appState.schedule.isEnabled {
                 appState.schedule.toggle(false)
             }
+            LoginItem.set(false)
             watchdog?.cancel()
             watchdog = nil
         }

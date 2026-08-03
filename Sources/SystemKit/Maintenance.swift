@@ -15,12 +15,15 @@ public struct HealthReport: Sendable {
 }
 
 public enum SystemUptime {
-    public static func days() -> Int {
+    public static func seconds() -> TimeInterval {
         var boottime = timeval()
         var size = MemoryLayout<timeval>.size
         guard sysctlbyname("kern.boottime", &boottime, &size, nil, 0) == 0 else { return 0 }
-        let up = Date().timeIntervalSince1970 - TimeInterval(boottime.tv_sec)
-        return max(0, Int(up / 86_400))
+        return max(0, Date().timeIntervalSince1970 - TimeInterval(boottime.tv_sec))
+    }
+
+    public static func days() -> Int {
+        Int(seconds() / 86_400)
     }
 }
 

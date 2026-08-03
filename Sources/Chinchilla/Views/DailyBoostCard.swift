@@ -49,7 +49,7 @@ struct DailyBoostCard: View {
                 Spacer()
             }
             if boost.isEnabled {
-                Text("Heads-ups are gentle: at most one memory alert every 2 hours (only when it's genuinely struggling), and a restart reminder past 14 days of uptime, at most weekly.")
+                Text("Heads-ups are gentle: at most one memory alert every 2 hours (only when it's genuinely struggling), and a restart reminder past 14 days of uptime, at most weekly. Chinchilla starts quietly at login (menu bar only) so this survives reboots — removable in System Settings → Login Items.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

@@ -31,12 +31,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     static let keepInMenuBarKey = "keepInMenuBar"
 
+    /// Launched right after boot/login (as a login item): start quietly in
+    /// the menu bar instead of shoving the window in the user's face.
+    static let isLoginLaunch = SystemUptime.seconds() < 180
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         if Self.isScheduledRun {
             runScheduledClean()
             return
         }
         UserDefaults.standard.register(defaults: [Self.keepInMenuBarKey: true])
+        if Self.isLoginLaunch {
+            NSApp.setActivationPolicy(.accessory)
+            return
+        }
         // Essential when launched via `swift run` (no bundle); harmless when bundled.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -101,8 +109,11 @@ struct ChinchillaApp: App {
         .windowToolbarStyle(.unified)
         // Always show the main window on launch — without this, macOS can
         // restore a "no windows" state and the app looks like it didn't open.
-        // In the scheduled headless run the opposite holds: never flash it.
-        .defaultLaunchBehavior(AppDelegate.isScheduledRun ? .suppressed : .presented)
+        // Exceptions: the scheduled headless run and login-item launches,
+        // which start quietly in the menu bar.
+        .defaultLaunchBehavior(
+            (AppDelegate.isScheduledRun || AppDelegate.isLoginLaunch) ? .suppressed : .presented
+        )
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
