@@ -10,6 +10,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case diskAnalyzer
     case gaming
     case startup
+    case health
     case devTools
 
     var id: String { rawValue }
@@ -22,6 +23,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .diskAnalyzer: "Disk Space"
         case .gaming: "Gaming Mode"
         case .startup: "Startup"
+        case .health: "Health"
         case .devTools: "Docker & Dev"
         }
     }
@@ -34,6 +36,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .diskAnalyzer: "chart.pie.fill"
         case .gaming: "gamecontroller.fill"
         case .startup: "power"
+        case .health: "stethoscope"
         case .devTools: "shippingbox.fill"
         }
     }
@@ -46,6 +49,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .diskAnalyzer: .orange
         case .gaming: .green
         case .startup: .yellow
+        case .health: .mint
         case .devTools: .cyan
         }
     }
@@ -69,6 +73,7 @@ final class AppState {
     let memory = MemoryModel()
     let dailyBoost = DailyBoostModel()
     let tabGuard = TabGuardModel()
+    let health = HealthModel()
 
     init() {
         dailyBoost.appState = self

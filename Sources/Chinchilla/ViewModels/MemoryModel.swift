@@ -46,11 +46,16 @@ final class MemoryModel {
             sysctlbyname("hw.memsize", &size, &length, nil, 0)
             memoryTotal = Int64(size)
             topApps = await Task.detached(priority: .userInitiated) {
-                ProcessMemory.topConsumers()
+                await ProcessMemory.topConsumersWithCPU()
+            }.value
+            appleIntelligenceBusy = await Task.detached {
+                ProcessMemory.appleIntelligenceActive()
             }.value
             refreshing = false
         }
     }
+
+    var appleIntelligenceBusy = false
 
     /// The biggest actionable consumer (excluding the macOS bucket).
     var biggestApp: AppMemoryUsage? {
@@ -101,6 +106,13 @@ final class MemoryModel {
                 icon: "memorychip",
                 text: "With 8 GB of memory, 2–3 big apps at a time is the sweet spot. Check what launches automatically in Startup.",
                 destination: .startup
+            ))
+        }
+        if appleIntelligenceBusy, memoryTotal <= 16 << 30, health != .fine {
+            tips.append(Tip(
+                icon: "sparkle",
+                text: "Apple Intelligence is working in the background right now. On smaller Macs it's a real memory/CPU user — if you don't use it, turning it off in System Settings → Apple Intelligence & Siri gives resources back.",
+                destination: nil
             ))
         }
         if health == .fine, tips.isEmpty {

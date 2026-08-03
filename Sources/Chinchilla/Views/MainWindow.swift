@@ -67,6 +67,7 @@ struct MainWindow: View {
         case .diskAnalyzer: DiskAnalyzerView()
         case .gaming: GamingModeView()
         case .startup: StartupView()
+        case .health: HealthView()
         case .devTools: DevToolsView()
         }
     }

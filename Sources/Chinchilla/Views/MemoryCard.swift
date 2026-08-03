@@ -34,40 +34,17 @@ struct MemoryCard: View {
             }
 
             if !model.topApps.isEmpty {
-                let maxFootprint = model.topApps.first?.footprint ?? 1
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Using the most memory right now")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     ForEach(model.topApps.prefix(4)) { app in
-                        HStack(spacing: 8) {
-                            Text(verbatim: app.name)
-                                .font(.callout)
-                                .frame(width: 150, alignment: .leading)
-                                .lineLimit(1)
-                            GeometryReader { geo in
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(barColor(model, app))
-                                    .frame(
-                                        width: max(3, geo.size.width * CGFloat(app.footprint) / CGFloat(maxFootprint)),
-                                        height: 6
-                                    )
-                                    .frame(maxHeight: .infinity, alignment: .center)
-                            }
-                            Text(app.footprint, format: .byteCount(style: .memory))
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .frame(width: 64, alignment: .trailing)
-                            if model.canQuit(app) {
-                                Button("Close") { model.quit(app) }
-                                    .controlSize(.mini)
-                                    .help("Quits the app the normal way — it can ask you to save first.")
-                            } else {
-                                Text(verbatim: " ")
-                                    .frame(width: 40)
-                            }
-                        }
-                        .frame(height: 20)
+                        AppUsageRow(
+                            model: model,
+                            app: app,
+                            maxFootprint: model.topApps.first?.footprint ?? 1,
+                            color: statusColor(model)
+                        )
                     }
                 }
             }
@@ -133,7 +110,49 @@ struct MemoryCard: View {
         Text("Memory pressure: \(String(describing: model.health)) · swap \(Text(model.swapUsed, format: .byteCount(style: .memory))) · total \(Text(model.memoryTotal, format: .byteCount(style: .memory)))")
     }
 
-    private func barColor(_ model: MemoryModel, _ app: AppMemoryUsage) -> Color {
-        app.name == "macOS" ? .gray.opacity(0.6) : statusColor(model).opacity(0.75)
+}
+
+private struct AppUsageRow: View {
+    let model: MemoryModel
+    let app: AppMemoryUsage
+    let maxFootprint: Int64
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(verbatim: app.name)
+                .font(.callout)
+                .frame(width: 150, alignment: .leading)
+                .lineLimit(1)
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(app.name == "macOS" ? Color.gray.opacity(0.6) : color.opacity(0.75))
+                    .frame(
+                        width: max(3, geo.size.width * CGFloat(app.footprint) / CGFloat(max(maxFootprint, 1))),
+                        height: 6
+                    )
+                    .frame(maxHeight: .infinity, alignment: .center)
+            }
+            Text(app.footprint, format: .byteCount(style: .memory))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 64, alignment: .trailing)
+            if let cpu = app.cpuPercent {
+                Text(verbatim: cpu >= 1 ? "\(Int(cpu))% CPU" : "·")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(cpu >= 50 ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
+                    .frame(width: 58, alignment: .trailing)
+                    .help("CPU over the last second, all of the app's processes combined. 100% = one full core.")
+            }
+            if model.canQuit(app) {
+                Button("Close") { model.quit(app) }
+                    .controlSize(.mini)
+                    .help("Quits the app the normal way — it can ask you to save first.")
+            } else {
+                Text(verbatim: " ")
+                    .frame(width: 40)
+            }
+        }
+        .frame(height: 20)
     }
 }
