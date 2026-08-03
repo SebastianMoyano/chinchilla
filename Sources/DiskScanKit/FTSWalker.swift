@@ -1,5 +1,19 @@
 import Foundation
 import Darwin
+import Synchronization
+
+/// Shared (device, inode) registry so hardlinked files are counted once
+/// even when several walkers scan sibling subtrees in parallel.
+public final class HardlinkRegistry: Sendable {
+    private let seen = Mutex<Set<String>>([])
+
+    public init() {}
+
+    /// Returns true the first time a (dev, inode) pair is seen.
+    public func firstSighting(dev: Int32, ino: UInt64) -> Bool {
+        seen.withLock { $0.insert("\(dev):\(ino)").inserted }
+    }
+}
 
 public struct WalkOptions: Sendable {
     /// Bundles reported as leaves — sized but not expanded.
@@ -24,6 +38,8 @@ public struct WalkOptions: Sendable {
     public var onProgress: (@Sendable (Int64, String) -> Void)?
     /// Cooperative cancellation, checked every ~2048 entries.
     public var isCancelled: (@Sendable () -> Bool)?
+    /// Cross-walker hardlink dedupe; nil = per-walk local set.
+    public var hardlinks: HardlinkRegistry?
 
     public init() {}
 }
@@ -124,8 +140,13 @@ public enum FTSWalker {
             case FTS_F, FTS_SL, FTS_SLNONE, FTS_DEFAULT:
                 guard let st = ent.pointee.fts_statp?.pointee else { continue }
                 if st.st_nlink > 1 {
-                    // Dedupe hardlinks within this walk.
-                    if !seenHardlinks.insert(UInt64(st.st_ino)).inserted { continue }
+                    // Dedupe hardlinks — across sibling walkers when a shared
+                    // registry is provided (parallel scans), locally otherwise.
+                    if let registry = options.hardlinks {
+                        if !registry.firstSighting(dev: st.st_dev, ino: UInt64(st.st_ino)) { continue }
+                    } else if !seenHardlinks.insert(UInt64(st.st_ino)).inserted {
+                        continue
+                    }
                 }
                 let allocated = Int64(st.st_blocks) * 512
                 totalBytes += allocated

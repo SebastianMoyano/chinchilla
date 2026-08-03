@@ -84,10 +84,17 @@ final class DeepCleanModel {
         }
     }
 
+    /// Bundle IDs whose items were dropped at clean time because the app
+    /// was running — shown in the summary.
+    var skippedForRunningApps = 0
+
     func clean() {
         guard phase == .review, !selectedItems.isEmpty else { return }
         phase = .cleaning
-        let items = selectedItems
+        // Enforce the running-app guard at clean time, not just at
+        // pre-selection — the user may have launched Chrome after scanning.
+        let items = RunningAppGuard.filterOutConflicts(selectedItems)
+        skippedForRunningApps = selectedItems.count - items.count
         let dry = dryRun
         Task {
             let result = await Cleaner.clean(items: items, dryRun: dry)

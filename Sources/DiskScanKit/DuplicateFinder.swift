@@ -9,6 +9,9 @@ public struct DuplicateGroup: Sendable, Identifiable {
 
     public var wastedBytes: Int64 { fileSize * Int64(paths.count - 1) }
     public var count: Int { paths.count }
+    /// Files above the full-hash limit are matched by size + head/tail
+    /// fingerprint only — near-certain, but the UI must not pre-select them.
+    public var isFingerprintOnly: Bool { fileSize > DuplicateFinder.fullHashLimit }
 
     public init(id: String, fileSize: Int64, paths: [String]) {
         self.id = id
@@ -21,7 +24,7 @@ public struct DuplicateGroup: Sendable, Identifiable {
 /// with SHA-256 (full content < 64 MB; head+tail 1 MB for giants — with equal
 /// size that's a near-certain match, and everything goes to Trash anyway).
 public enum DuplicateFinder {
-    static let fullHashLimit: Int64 = 64 << 20
+    public static let fullHashLimit: Int64 = 64 << 20
     static let chunk = 1 << 20
 
     public static func find(
@@ -34,10 +37,14 @@ public enum DuplicateFinder {
             .map { home + "/" + $0 }
             .filter { FileManager.default.fileExists(atPath: $0) }
 
-        // Phase 1: collect (path, size, mtime) of candidate files.
+        // Phase 1: collect (path, size, mtime) of candidate files. Hardlinked
+        // paths share an inode — deleting one frees nothing, so they count as
+        // ONE file here, never as a duplicate pair.
         var bySize: [Int64: [(path: String, mtime: Date)]] = [:]
+        var seenInodes = Set<String>()
         for root in scanRoots {
-            collectFiles(root: root, minSize: minSize, isCancelled: isCancelled) { path, size, mtime in
+            collectFiles(root: root, minSize: minSize, isCancelled: isCancelled) { path, size, mtime, dev, ino in
+                guard seenInodes.insert("\(dev):\(ino)").inserted else { return }
                 bySize[size, default: []].append((path, mtime))
             }
         }
@@ -90,7 +97,7 @@ public enum DuplicateFinder {
     private static func collectFiles(
         root: String, minSize: Int64,
         isCancelled: (@Sendable () -> Bool)?,
-        emit: (String, Int64, Date) -> Void
+        emit: (String, Int64, Date, Int32, UInt64) -> Void
     ) {
         var argv: [UnsafeMutablePointer<CChar>?] = [strdup(root), nil]
         defer { free(argv[0]) }
@@ -115,7 +122,11 @@ public enum DuplicateFinder {
             if st.st_flags & sfDataless != 0 { continue }  // cloud placeholder
             let size = Int64(st.st_size)
             guard size >= minSize else { continue }
-            emit(path, size, Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec)))
+            emit(
+                path, size,
+                Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec)),
+                st.st_dev, UInt64(st.st_ino)
+            )
         }
     }
 

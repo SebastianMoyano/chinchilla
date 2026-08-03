@@ -162,6 +162,16 @@
 "Sponsor" = "Apoyar";
 "Enjoying Chinchilla? Support its development ♥" = "¿Te sirve Chinchilla? Apoya su desarrollo ♥";
 
+/* Hardening 0.2.1 */
+"%lld items skipped — their app was running" = "%lld elementos omitidos — su app estaba abierta";
+"Run the installed app (e.g. /Applications/Chinchilla.app) to enable scheduling." = "Ejecuta la app instalada (p. ej. /Applications/Chinchilla.app) para activar la programación.";
+"Notifications are off — the weekly clean will run silently. You can still check the log in Deep Clean." = "Las notificaciones están desactivadas — la limpieza semanal correrá en silencio. Puedes revisar el registro en Limpieza profunda.";
+"Move %lld duplicates to the Trash? At least one copy of each file is kept." = "¿Mover %lld duplicados a la Papelera? Se conserva al menos una copia de cada archivo.";
+"size+fingerprint match" = "coincidencia por tamaño+huella";
+"Too large for a full content hash — matched by size plus head/tail fingerprint. Review before trashing; not pre-selected." = "Demasiado grande para hash completo: coincide por tamaño más huella de inicio/fin. Revisa antes de borrar; no viene pre-seleccionado.";
+"Move the selected build artifacts to the Trash? The next install/build recreates them." = "¿Mover los artefactos seleccionados a la Papelera? La próxima instalación o build los recrea.";
+"Uninstall %@? Everything goes to the Trash and can be put back." = "¿Desinstalar %@? Todo va a la Papelera y puede recuperarse.";
+
 /* Startup */
 "Startup" = "Inicio";
 "Apps that open at login are managed by macOS." = "Las apps que se abren al iniciar sesión las gestiona macOS.";

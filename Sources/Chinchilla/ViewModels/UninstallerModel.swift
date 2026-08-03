@@ -42,6 +42,9 @@ final class UninstallerModel {
             let found = await Task.detached(priority: .userInitiated) {
                 LeftoverFinder.find(for: app)
             }.value
+            // The user may have opened another app's sheet meanwhile — never
+            // attach app A's leftovers to app B.
+            guard inspecting?.id == app.id else { return }
             leftovers = found
             selectedLeftovers = Set(found.map(\.id))
         }

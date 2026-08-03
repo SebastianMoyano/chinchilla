@@ -119,7 +119,8 @@ public enum RuleCatalog {
             title: "User Logs",
             patterns: ["~/Library/Logs/*"],
             safety: .safe,
-            skipNames: ["DiagnosticReports"]
+            // "Chinchilla" holds our own audit log — never eat it.
+            skipNames: ["DiagnosticReports", "Chinchilla"]
         ),
         CleanRule(
             id: "logs.diagnostics",

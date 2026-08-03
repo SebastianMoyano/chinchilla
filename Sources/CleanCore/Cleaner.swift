@@ -31,14 +31,19 @@ public enum Cleaner {
             }
             let roots = rule.declaredRoots
             if item.contentsOnly {
-                let children = (try? FileManager.default.contentsOfDirectory(atPath: item.path)) ?? []
-                var freedHere: Int64 = 0
+                // An unreadable directory is a failure, not a silent success —
+                // otherwise we'd credit bytes we never deleted.
+                guard let children = try? FileManager.default.contentsOfDirectory(atPath: item.path) else {
+                    outcome.failures.append(CleanFailure(path: item.path, reason: "directory not readable"))
+                    continue
+                }
                 var failedHere = false
+                var deletedAny = false
                 for child in children {
                     let childPath = (item.path as NSString).appendingPathComponent(child)
                     switch delete(path: childPath, roots: roots, mode: item.deleteMode, dryRun: dryRun) {
                     case .success:
-                        continue
+                        deletedAny = true
                     case .failure(let failure):
                         // EBUSY/EPERM on individual cache files: attempt-and-skip.
                         outcome.failures.append(failure)
@@ -46,10 +51,9 @@ public enum Cleaner {
                     }
                 }
                 // Item-level size is the best estimate we have; only count it
-                // when everything went through.
-                freedHere = failedHere ? 0 : item.size
-                if !failedHere {
-                    outcome.freedBytes += freedHere
+                // when something was actually removed and nothing failed.
+                if !failedHere, deletedAny {
+                    outcome.freedBytes += item.size
                     outcome.deletedPaths.append(item.path + "/*")
                 }
             } else {

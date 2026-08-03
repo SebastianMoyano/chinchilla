@@ -5,6 +5,7 @@ import DiskScanKit
 struct DevToolsView: View {
     @Environment(AppState.self) private var appState
     @State private var confirmingAction: DockerPruneAction?
+    @State private var confirmingArtifactTrash = false
 
     var body: some View {
         let model = appState.devTools
@@ -163,12 +164,21 @@ struct DevToolsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button {
-                        model.trashSelectedArtifacts()
+                        confirmingArtifactTrash = true
                     } label: {
                         Label("Move to Trash", systemImage: "trash")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.orange)
+                    .confirmationDialog(
+                        "Move the selected build artifacts to the Trash? The next install/build recreates them.",
+                        isPresented: $confirmingArtifactTrash,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Move to Trash", role: .destructive) {
+                            model.trashSelectedArtifacts()
+                        }
+                    }
                 }
             }
         }

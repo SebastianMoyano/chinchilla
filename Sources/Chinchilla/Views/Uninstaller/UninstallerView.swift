@@ -77,6 +77,7 @@ private struct AppRow: View {
 private struct LeftoversSheet: View {
     let model: UninstallerModel
     let app: InstalledApp
+    @State private var confirmingUninstall = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -170,7 +171,7 @@ private struct LeftoversSheet: View {
                 Text(model.inspectedTotalBytes, format: .byteCount(style: .file))
                     .font(.callout.bold().monospacedDigit())
                 Button {
-                    model.uninstall()
+                    confirmingUninstall = true
                 } label: {
                     Label("Uninstall", systemImage: "trash")
                         .frame(minWidth: 100)
@@ -178,6 +179,15 @@ private struct LeftoversSheet: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
                 .disabled(model.uninstalling || (model.isRunning(app) && model.includeAppBundle))
+                .confirmationDialog(
+                    "Uninstall \(app.name)? Everything goes to the Trash and can be put back.",
+                    isPresented: $confirmingUninstall,
+                    titleVisibility: .visible
+                ) {
+                    Button("Uninstall", role: .destructive) {
+                        model.uninstall()
+                    }
+                }
             }
         }
         .padding(20)

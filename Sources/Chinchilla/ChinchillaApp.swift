@@ -21,18 +21,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         !Self.isScheduledRun
     }
 
-    /// Headless weekly clean: safe categories only, then notify and exit.
+    /// Headless weekly clean: safe categories only, skipping anything whose
+    /// app is currently running, then notify and exit.
     @MainActor
     private func runScheduledClean() {
         NSApp.setActivationPolicy(.accessory)
-        NSApp.windows.forEach { $0.orderOut(nil) }
         Task { @MainActor in
-            // The Window scene may materialize after launch — keep it hidden.
-            try? await Task.sleep(for: .milliseconds(300))
-            NSApp.windows.forEach { $0.orderOut(nil) }
-
             let report = await CleanScanner.scan(hasFullDiskAccess: Permissions.hasFullDiskAccess())
-            let safeItems = report.items.filter { $0.safety == .safe }
+            let safeItems = RunningAppGuard.filterOutConflicts(
+                report.items.filter { $0.safety == .safe }
+            )
             let outcome = await Cleaner.clean(items: safeItems, dryRun: false)
 
             let content = UNMutableNotificationContent()
@@ -63,7 +61,8 @@ struct ChinchillaApp: App {
         .windowToolbarStyle(.unified)
         // Always show the main window on launch — without this, macOS can
         // restore a "no windows" state and the app looks like it didn't open.
-        .defaultLaunchBehavior(.presented)
+        // In the scheduled headless run the opposite holds: never flash it.
+        .defaultLaunchBehavior(AppDelegate.isScheduledRun ? .suppressed : .presented)
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
@@ -72,7 +71,7 @@ struct ChinchillaApp: App {
             }
         }
 
-        MenuBarExtra {
+        MenuBarExtra(isInserted: .constant(!AppDelegate.isScheduledRun)) {
             MenuBarView()
                 .environment(appState)
         } label: {

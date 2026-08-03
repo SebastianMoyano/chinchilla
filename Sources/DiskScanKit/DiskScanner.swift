@@ -54,6 +54,7 @@ public enum DiskScanner {
         )
         var opts = options
         opts.isCancelled = { Task.isCancelled }
+        opts.hardlinks = HardlinkRegistry()  // shared across parallel walkers
         opts.onProgress = { delta, path in
             let emit: Int64? = progressState.withLock { state in
                 state.total += delta

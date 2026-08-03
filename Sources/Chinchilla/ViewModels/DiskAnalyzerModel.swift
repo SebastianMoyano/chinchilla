@@ -106,8 +106,12 @@ final class DiskAnalyzerModel {
                 return
             }
             duplicateGroups = groups
-            // Pre-select every copy except the newest of each group.
-            selectedDupes = Set(groups.flatMap { $0.paths.dropFirst() })
+            // Pre-select every copy except the newest — but only for groups
+            // verified by full content hash; fingerprint-only giants require
+            // an explicit opt-in per file.
+            selectedDupes = Set(
+                groups.filter { !$0.isFingerprintOnly }.flatMap { $0.paths.dropFirst() }
+            )
             withAnimation(.spring) { dupPhase = .done }
         }
     }

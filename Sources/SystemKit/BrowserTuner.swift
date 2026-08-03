@@ -102,25 +102,39 @@ public enum BrowserTuner {
         guard let scriptName = browser.scriptName else {
             throw ShellError(exitCode: -1, stderr: "unsupported browser")
         }
+        // Two passes: scan forward so the FIRST (oldest) copy of each URL is
+        // the one we keep, then close collected duplicates from the highest
+        // indices down so earlier indices stay valid even when a window
+        // empties and closes itself. Blank/new tabs (missing value) are never
+        // treated as duplicates of each other.
         let script = """
         tell application "\(scriptName)"
             set seen to {}
-            set closedCount to 0
-            set totalCount to 0
-            repeat with w in windows
-                set tabList to tabs of w
-                repeat with t in reverse of tabList
-                    set u to URL of t
-                    if u is in seen then
-                        close t
-                        set closedCount to closedCount + 1
-                    else
+            set dupWins to {}
+            set dupTabs to {}
+            set keptCount to 0
+            set winCount to count of windows
+            repeat with wi from 1 to winCount
+                set tabCount to count of tabs of window wi
+                repeat with ti from 1 to tabCount
+                    set u to URL of tab ti of window wi
+                    if u is missing value then
+                        set keptCount to keptCount + 1
+                    else if u is in seen then
+                        set beginning of dupWins to wi
+                        set beginning of dupTabs to ti
+                        else
                         set end of seen to u
-                        set totalCount to totalCount + 1
+                        set keptCount to keptCount + 1
                     end if
                 end repeat
             end repeat
-            return (closedCount as string) & "," & (totalCount as string)
+            repeat with i from 1 to count of dupWins
+                try
+                    close tab (item i of dupTabs) of window (item i of dupWins)
+                end try
+            end repeat
+            return ((count of dupWins) as string) & "," & (keptCount as string)
         end tell
         """
         let output = try await ShellRunner.run(

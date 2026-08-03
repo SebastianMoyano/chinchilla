@@ -34,13 +34,30 @@ final class ScheduleModel {
         }
     }
 
-    private func enable() async throws {
-        // Ask for notification permission so the weekly result is visible.
-        _ = try? await UNUserNotificationCenter.current()
-            .requestAuthorization(options: [.alert, .badge])
+    struct ScheduleError: LocalizedError {
+        let errorDescription: String?
+    }
 
-        let executable = Bundle.main.executablePath
-            ?? "/Applications/Chinchilla.app/Contents/MacOS/Chinchilla"
+    private func enable() async throws {
+        // The agent plist bakes in the executable path — only a real installed
+        // bundle survives rebuilds and relaunches.
+        guard Bundle.main.bundleIdentifier != nil,
+              let executable = Bundle.main.executablePath,
+              !executable.contains("/.build/") else {
+            throw ScheduleError(errorDescription: String(
+                localized: "Run the installed app (e.g. /Applications/Chinchilla.app) to enable scheduling."
+            ))
+        }
+
+        // Ask for notification permission so the weekly result is visible;
+        // if denied, warn — the clean would otherwise run invisibly.
+        let granted = (try? await UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .badge])) ?? false
+        if !granted {
+            errorMessage = String(
+                localized: "Notifications are off — the weekly clean will run silently. You can still check the log in Deep Clean."
+            )
+        }
         let plist: [String: Any] = [
             "Label": Self.label,
             "ProgramArguments": [executable, "--scheduled-clean"],

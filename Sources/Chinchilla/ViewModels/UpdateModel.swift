@@ -21,8 +21,10 @@ final class UpdateModel {
     }
 
     /// Quiet check, at most once a day. Failures are silent — an update
-    /// check must never bother anyone.
+    /// check must never bother anyone. Skipped entirely for unbundled
+    /// (`swift run`) builds, whose version reads as "0".
     func checkIfStale() {
+        guard Bundle.main.bundleIdentifier != nil else { return }
         let last = UserDefaults.standard.double(forKey: Self.lastCheckKey)
         guard Date.now.timeIntervalSince1970 - last > 86_400 else { return }
         Task { await check(manual: false) }
@@ -34,7 +36,6 @@ final class UpdateModel {
     }
 
     private func check(manual: Bool) async {
-        UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: Self.lastCheckKey)
         struct Release: Decodable {
             let tag_name: String
             let html_url: String
@@ -47,6 +48,9 @@ final class UpdateModel {
             request.timeoutInterval = 10
             let (data, _) = try await URLSession.shared.data(for: request)
             let release = try JSONDecoder().decode(Release.self, from: data)
+            // Stamp only on success — a transient offline moment shouldn't
+            // suppress checks for a whole day.
+            UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: Self.lastCheckKey)
             let latest = release.tag_name.hasPrefix("v")
                 ? String(release.tag_name.dropFirst())
                 : release.tag_name

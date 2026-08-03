@@ -151,6 +151,11 @@ struct DeepCleanView: View {
                     .foregroundStyle(.purple)
                 Text(outcome.dryRun ? "would be freed" : "freed")
                     .foregroundStyle(.secondary)
+                if model.skippedForRunningApps > 0 {
+                    Label("\(model.skippedForRunningApps) items skipped — their app was running", systemImage: "info.circle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 if !outcome.failures.isEmpty {
                     DisclosureGroup {
                         ScrollView {

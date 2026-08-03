@@ -121,6 +121,7 @@ struct DiskAnalyzerView: View {
 
 struct DuplicatesView: View {
     let model: DiskAnalyzerModel
+    @State private var confirmingTrash = false
 
     var body: some View {
         switch model.dupPhase {
@@ -183,13 +184,22 @@ struct DuplicatesView: View {
                         Spacer()
                         Button("Scan Again") { model.startDuplicateScan() }
                         Button {
-                            model.trashSelectedDuplicates()
+                            confirmingTrash = true
                         } label: {
                             Label("Move to Trash", systemImage: "trash")
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.orange)
                         .disabled(model.selectedDupes.isEmpty)
+                        .confirmationDialog(
+                            "Move \(model.selectedDupes.count) duplicates to the Trash? At least one copy of each file is kept.",
+                            isPresented: $confirmingTrash,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Move to Trash", role: .destructive) {
+                                model.trashSelectedDuplicates()
+                            }
+                        }
                     }
                     .padding(14)
                     .background(.bar)
@@ -249,6 +259,14 @@ private struct DuplicateGroupSection: View {
             HStack {
                 Label("\(group.count) copies", systemImage: "doc.on.doc")
                     .font(.headline)
+                if group.isFingerprintOnly {
+                    Text("size+fingerprint match")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(.orange.opacity(0.15), in: Capsule())
+                        .foregroundStyle(.orange)
+                        .help("Too large for a full content hash — matched by size plus head/tail fingerprint. Review before trashing; not pre-selected.")
+                }
                 Spacer()
                 Text("wastes \(Text(group.wastedBytes, format: .byteCount(style: .file)))")
                     .font(.caption)
