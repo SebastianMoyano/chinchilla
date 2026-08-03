@@ -415,3 +415,18 @@
 "Everything here is free and account-less: your Mac serves the media directly to the TV over your Wi-Fi. Nothing goes through the internet." = "Todo esto es gratis y sin cuentas: tu Mac sirve el contenido directo al TV por tu Wi-Fi. Nada pasa por internet.";
 "Couldn't start the local server." = "No se pudo iniciar el servidor local.";
 "No network address found — are you on Wi-Fi?" = "No se encontró dirección de red — ¿estás conectado a Wi-Fi?";
+
+/* DLNA + estados vacíos (0.9.1) */
+"No TVs found" = "No se encontraron TVs";
+"Checklist: the TV is ON and on the SAME Wi-Fi as this Mac (not a guest network); if your router has \"AP isolation\" or \"client isolation\", turn it off. Most smart TVs answer over DLNA without installing anything — if yours doesn't, install FCast Receiver (Android TV) or use the manual connection below." = "Checklist: el TV está ENCENDIDO y en la MISMA Wi-Fi que este Mac (no una red de invitados); si tu router tiene \"aislamiento de clientes/AP\", desactívalo. La mayoría de los smart TVs responden por DLNA sin instalar nada — si el tuyo no, instala FCast Receiver (Android TV) o usa la conexión manual de abajo.";
+"Looking for TVs — both FCast receivers and any DLNA-capable smart TV (most of them, nothing to install)." = "Buscando TVs — receptores FCast y cualquier smart TV con DLNA (la mayoría, sin instalar nada).";
+"Search again" = "Buscar de nuevo";
+"Connect by IP:" = "Conectar por IP:";
+"For FCast receivers on networks where automatic discovery is blocked." = "Para receptores FCast en redes donde el descubrimiento automático está bloqueado.";
+"The TV rejected the file. Try an .mp4 (H.264) — TVs are picky about formats." = "El TV rechazó el archivo. Prueba con un .mp4 (H.264) — los TVs son quisquillosos con los formatos.";
+"Which TVs work?" = "¿Qué TVs funcionan?";
+"Most smart TVs — nothing to install" = "La mayoría de smart TVs — sin instalar nada";
+"Samsung, LG, Sony, TCL, Philips and friends answer over DLNA out of the box. They show up here on their own; just make sure the TV is on and on the same Wi-Fi." = "Samsung, LG, Sony, TCL, Philips y compañía responden por DLNA de fábrica. Aparecen aquí solos; solo asegúrate de que el TV esté encendido y en la misma Wi-Fi.";
+"Install \"FCast Receiver\" from the Play Store and open it for the FCast path (better controls and, later, screen mirroring)." = "Instala \"FCast Receiver\" desde la Play Store y ábrela para la vía FCast (mejores controles y, más adelante, espejo de pantalla).";
+"Screen mirroring today" = "Espejo de pantalla hoy";
+"Honest tip while our mirroring is in the oven: Samsung and LG TVs have AirPlay 2 built in — macOS can already mirror or extend to them natively from Control Center → Screen Mirroring." = "Consejo honesto mientras nuestro espejo está en el horno: los TVs Samsung y LG traen AirPlay 2 — macOS ya puede duplicar o extender hacia ellos de forma nativa desde Centro de control → Duplicar pantalla.";

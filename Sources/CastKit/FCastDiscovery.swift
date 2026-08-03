@@ -6,6 +6,11 @@ public struct FCastDevice: Sendable, Identifiable, Hashable {
     public let endpoint: NWEndpoint
 
     public var id: String { name }
+
+    public init(name: String, endpoint: NWEndpoint) {
+        self.name = name
+        self.endpoint = endpoint
+    }
 }
 
 public enum DiscoveryState: Sendable, Equatable {

@@ -4,6 +4,7 @@ import CastKit
 
 struct CastView: View {
     @Environment(AppState.self) private var appState
+    @State private var manualIP = ""
 
     var body: some View {
         let model = appState.cast
@@ -13,7 +14,7 @@ struct CastView: View {
                     localNetworkBanner
                 }
                 devicesCard(model)
-                if model.connectedDevice != nil {
+                if model.connected != nil {
                     NowPlayingCard()
                 }
                 ReceiverGuideCard()
@@ -52,22 +53,55 @@ struct CastView: View {
                 Label("TVs on your network", systemImage: "tv.badge.wifi")
                     .font(.headline)
                 Spacer()
-                if model.discoveryState == .browsing && model.devices.isEmpty {
+                if model.targets.isEmpty && !model.searchedAndEmpty {
                     ProgressView().controlSize(.small)
                 }
+                Button {
+                    model.startDiscovery()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Search again")
             }
-            if model.devices.isEmpty {
-                Text("Searching for FCast receivers… Make sure the FCast Receiver app is OPEN on your TV (see the guide below) and both are on the same Wi-Fi.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+
+            if model.targets.isEmpty {
+                if model.searchedAndEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("No TVs found", systemImage: "questionmark.circle")
+                            .font(.callout.weight(.medium))
+                        Text("Checklist: the TV is ON and on the SAME Wi-Fi as this Mac (not a guest network); if your router has \"AP isolation\" or \"client isolation\", turn it off. Most smart TVs answer over DLNA without installing anything — if yours doesn't, install FCast Receiver (Android TV) or use the manual connection below.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("Looking for TVs — both FCast receivers and any DLNA-capable smart TV (most of them, nothing to install).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            ForEach(model.devices) { device in
-                HStack {
+
+            ForEach(model.targets) { target in
+                HStack(spacing: 8) {
                     Image(systemName: "tv")
                         .foregroundStyle(.indigo)
-                    Text(verbatim: device.name)
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(verbatim: target.name)
+                            Text(target.protocolLabel)
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(.indigo.opacity(0.15), in: Capsule())
+                                .foregroundStyle(.indigo)
+                        }
+                        if let subtitle = target.subtitle {
+                            Text(verbatim: subtitle)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                    }
                     Spacer()
-                    if model.connectedDevice == device {
+                    if model.connected == target {
                         switch model.sessionState {
                         case .ready:
                             Label("Connected", systemImage: "checkmark.circle.fill")
@@ -78,16 +112,32 @@ struct CastView: View {
                         case .connecting:
                             ProgressView().controlSize(.small)
                         default:
-                            Button("Reconnect") { model.connect(to: device) }
+                            Button("Reconnect") { model.connect(to: target) }
                                 .controlSize(.small)
                         }
                     } else {
-                        Button("Connect") { model.connect(to: device) }
+                        Button("Connect") { model.connect(to: target) }
                             .controlSize(.small)
                     }
                 }
                 .padding(.vertical, 2)
             }
+
+            HStack(spacing: 8) {
+                Text("Connect by IP:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("192.168.1.50", text: $manualIP)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 140)
+                    .onSubmit { connectManual(model) }
+                Button("Connect") { connectManual(model) }
+                    .controlSize(.small)
+                    .disabled(manualIP.isEmpty)
+                Spacer()
+            }
+            .help("For FCast receivers on networks where automatic discovery is blocked.")
+
             if let error = model.lastError {
                 Text(verbatim: error)
                     .font(.caption)
@@ -96,6 +146,12 @@ struct CastView: View {
         }
         .padding(18)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func connectManual(_ model: CastModel) {
+        let host = manualIP.trimmingCharacters(in: .whitespaces)
+        guard !host.isEmpty else { return }
+        model.connectManually(host: host)
     }
 }
 
@@ -188,17 +244,21 @@ struct NowPlayingCard: View {
 struct ReceiverGuideCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Get your TV ready", systemImage: "questionmark.circle")
+            Label("Which TVs work?", systemImage: "questionmark.circle")
                 .font(.headline)
             guideRow(
-                brand: "Android TV / Google TV",
-                text: "Install \"FCast Receiver\" from the Play Store on the TV, open it, and it will appear above."
+                brand: "Most smart TVs — nothing to install",
+                text: "Samsung, LG, Sony, TCL, Philips and friends answer over DLNA out of the box. They show up here on their own; just make sure the TV is on and on the same Wi-Fi."
             )
             guideRow(
-                brand: "Samsung / LG",
-                text: "Honest tip: your TV has AirPlay 2 built in — for screen work, macOS can already mirror/extend to it natively (Control Center → Screen Mirroring). FCast receivers exist for these TVs but installing them is clunky."
+                brand: "Android TV / Google TV",
+                text: "Install \"FCast Receiver\" from the Play Store and open it for the FCast path (better controls and, later, screen mirroring)."
             )
-            Text("Everything here is free and account-less: your Mac serves the media directly to the TV over your Wi-Fi. Nothing goes through the internet.")
+            guideRow(
+                brand: "Screen mirroring today",
+                text: "Honest tip while our mirroring is in the oven: Samsung and LG TVs have AirPlay 2 built in — macOS can already mirror or extend to them natively from Control Center → Screen Mirroring."
+            )
+            Text("Everything here is free and account-less: your Mac serves the media straight to the TV over your Wi-Fi. Nothing goes through the internet.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -206,9 +266,9 @@ struct ReceiverGuideCard: View {
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
     }
 
-    private func guideRow(brand: String, text: LocalizedStringKey) -> some View {
+    private func guideRow(brand: LocalizedStringKey, text: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(verbatim: brand)
+            Text(brand)
                 .font(.callout.weight(.semibold))
             Text(text)
                 .font(.caption)
