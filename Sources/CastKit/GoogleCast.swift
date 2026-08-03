@@ -129,6 +129,12 @@ public actor GoogleCastSession {
     private var sessionID: String?
     private var mediaSessionID: Int?
     private var pendingLoad: (url: String, mime: String, title: String, live: Bool)?
+    /// Which receiver app to launch: media player by default, or Cast
+    /// Streaming for low-latency mirroring.
+    private var appID = GoogleCastSession.defaultMediaAppID
+    /// Extra namespace to listen on (Cast Streaming's OFFER/ANSWER).
+    private var extraNamespace: String?
+    private var onNamespaceMessage: (@Sendable (String, String) -> Void)?
     private var heartbeat: Task<Void, Never>?
     private var continuation: AsyncStream<GoogleCastEvent>.Continuation?
 
@@ -168,7 +174,7 @@ public actor GoogleCastSession {
         case .ready:
             send(namespace: Self.namespaceConnection, to: "receiver-0", payload: #"{"type":"CONNECT"}"#)
             send(namespace: Self.namespaceReceiver, to: "receiver-0",
-                 payload: #"{"type":"LAUNCH","appId":"\#(Self.defaultMediaAppID)","requestId":\#(nextRequestID())}"#)
+                 payload: #"{"type":"LAUNCH","appId":"\#(appID)","requestId":\#(nextRequestID())}"#)
             receiveLoop()
             startHeartbeat()
             continuation?.yield(.state(.ready))
@@ -221,7 +227,11 @@ public actor GoogleCastSession {
         receiveLoop()
     }
 
+    /// Diagnostics: see everything the receiver says.
+    public var onAnyMessage: (@Sendable (String, String) -> Void)?
+
     private func handle(namespace: String, payload: String) {
+        onAnyMessage?(namespace, payload)
         guard let data = payload.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         let type = json["type"] as? String ?? ""
@@ -235,7 +245,7 @@ public actor GoogleCastSession {
             guard type == "RECEIVER_STATUS",
                   let status = json["status"] as? [String: Any],
                   let apps = status["applications"] as? [[String: Any]],
-                  let app = apps.first(where: { ($0["appId"] as? String) == Self.defaultMediaAppID })
+                  let app = apps.first(where: { ($0["appId"] as? String) == appID })
             else { return }
             let transport = app["transportId"] as? String
             let session = app["sessionId"] as? String
@@ -273,8 +283,32 @@ public actor GoogleCastSession {
             }
             continuation?.yield(.media(time: time, duration: duration, playerState: playerState))
         default:
-            break
+            if namespace == extraNamespace {
+                onNamespaceMessage?(namespace, payload)
+            }
         }
+    }
+
+    /// Switches this session to Cast Streaming: launches the mirroring
+    /// receiver and routes its messages to `handler`.
+    public func useStreamingApp(
+        namespace: String, handler: @escaping @Sendable (String, String) -> Void
+    ) {
+        appID = CastStreaming.appID
+        extraNamespace = namespace
+        onNamespaceMessage = handler
+    }
+
+    /// Sends a raw payload on a custom namespace to the launched app.
+    public func sendCustom(namespace: String, payload: String) {
+        guard let transport = transportID else { return }
+        send(namespace: namespace, to: transport, payload: payload)
+    }
+
+    public var isAppReady: Bool { transportID != nil }
+
+    public func setOnAnyMessage(_ handler: @escaping @Sendable (String, String) -> Void) {
+        onAnyMessage = handler
     }
 
     private func startHeartbeat() {
