@@ -14,6 +14,10 @@ final class HLSSegmenter: NSObject, AVAssetWriterDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var sessionStarted = false
     private var finished = false
+    /// ScreenCaptureKit stamps buffers with host time (seconds since boot —
+    /// millions on a long-running Mac). Players expect a live stream to
+    /// start near zero, so every sample is retimed relative to the first.
+    private var timeOrigin: CMTime?
 
     init(width: Int, height: Int, bitrate: Int, includeAudio: Bool, store: HLSSegmentStore) throws {
         self.store = store
@@ -73,19 +77,57 @@ final class HLSSegmenter: NSObject, AVAssetWriterDelegate, @unchecked Sendable {
         defer { lock.unlock() }
         guard !finished, writer.status == .writing else { return }
         if !sessionStarted {
-            writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+            timeOrigin = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+            writer.startSession(atSourceTime: .zero)
             sessionStarted = true
         }
-        guard videoInput.isReadyForMoreMediaData else { return }  // realtime: drop, never queue
-        videoInput.append(sampleBuffer)
+        guard videoInput.isReadyForMoreMediaData,
+              let retimed = rebased(sampleBuffer) else { return }  // realtime: drop, never queue
+        videoInput.append(retimed)
     }
 
     func append(audio sampleBuffer: CMSampleBuffer) {
         lock.lock()
         defer { lock.unlock() }
         guard !finished, sessionStarted, writer.status == .writing,
-              let audioInput, audioInput.isReadyForMoreMediaData else { return }
-        audioInput.append(sampleBuffer)
+              let audioInput, audioInput.isReadyForMoreMediaData,
+              let retimed = rebased(sampleBuffer) else { return }
+        audioInput.append(retimed)
+    }
+
+    /// Shifts a sample so the stream's timeline starts at zero.
+    private func rebased(_ sampleBuffer: CMSampleBuffer) -> CMSampleBuffer? {
+        guard let origin = timeOrigin else { return sampleBuffer }
+        var count: CMItemCount = 0
+        guard CMSampleBufferGetSampleTimingInfoArray(
+            sampleBuffer, entryCount: 0, arrayToFill: nil, entriesNeededOut: &count
+        ) == noErr, count > 0 else { return sampleBuffer }
+
+        var timings = [CMSampleTimingInfo](
+            repeating: CMSampleTimingInfo(), count: Int(count)
+        )
+        guard CMSampleBufferGetSampleTimingInfoArray(
+            sampleBuffer, entryCount: count, arrayToFill: &timings, entriesNeededOut: nil
+        ) == noErr else { return sampleBuffer }
+
+        for index in timings.indices {
+            if timings[index].presentationTimeStamp.isValid {
+                timings[index].presentationTimeStamp =
+                    CMTimeSubtract(timings[index].presentationTimeStamp, origin)
+            }
+            if timings[index].decodeTimeStamp.isValid {
+                timings[index].decodeTimeStamp =
+                    CMTimeSubtract(timings[index].decodeTimeStamp, origin)
+            }
+        }
+
+        var retimed: CMSampleBuffer?
+        guard CMSampleBufferCreateCopyWithNewTiming(
+            allocator: kCFAllocatorDefault, sampleBuffer: sampleBuffer,
+            sampleTimingEntryCount: count, sampleTimingArray: &timings,
+            sampleBufferOut: &retimed
+        ) == noErr else { return sampleBuffer }
+        return retimed
     }
 
     func finish() async {

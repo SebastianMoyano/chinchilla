@@ -106,13 +106,15 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
 
     /// Waits until the first playable segment exists, so we never hand the
     /// TV a playlist it would choke on.
-    public func waitForFirstSegment(timeout: Duration = .seconds(10)) async -> Bool {
+    public func waitForFirstSegment(
+        minimumSegments: Int = 3, timeout: Duration = .seconds(15)
+    ) async -> Bool {
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {
-            if store.hasContent { return true }
+            if store.hasAtLeast(minimumSegments) { return true }
             try? await Task.sleep(for: .milliseconds(150))
         }
-        return false
+        return store.hasContent
     }
 
     // MARK: SCStreamOutput

@@ -37,6 +37,12 @@ public final class HLSSegmentStore: @unchecked Sendable {
         lock.withLock { initSegment != nil && !segments.isEmpty }
     }
 
+    /// Players buffer a few parts before showing anything; handing them a
+    /// one-segment playlist is a reliable way to get a black screen.
+    public func hasAtLeast(_ count: Int) -> Bool {
+        lock.withLock { initSegment != nil && segments.count >= count }
+    }
+
     /// Live playlist (no ENDLIST). VERSION 7 + EXT-X-MAP are required for
     /// fragmented MP4 segments.
     public func playlist() -> String {
@@ -47,6 +53,7 @@ public final class HLSSegmentStore: @unchecked Sendable {
                 "#EXT-X-VERSION:7",
                 "#EXT-X-TARGETDURATION:\(max(1, target))",
                 "#EXT-X-MEDIA-SEQUENCE:\(segments.first?.index ?? 0)",
+                "#EXT-X-INDEPENDENT-SEGMENTS",
                 "#EXT-X-MAP:URI=\"init.mp4\"",
             ]
             for segment in segments {

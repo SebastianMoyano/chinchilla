@@ -128,7 +128,7 @@ final class CastModel {
                     if path.hasPrefix("seg-"), path.hasSuffix(".m4s"),
                        let index = Int(path.dropFirst(4).dropLast(4)),
                        let data = store.segmentData(index: index) {
-                        return ("video/iso.segment", data)
+                        return ("video/mp4", data)
                     }
                     return nil
                 }
