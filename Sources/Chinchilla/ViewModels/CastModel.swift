@@ -531,6 +531,12 @@ final class CastModel {
         list += dlnaRenderers.map {
             CastTarget(id: "dlna:\($0.avTransportURL.absoluteString)", name: $0.name, kind: .dlna($0))
         }
+        // Every other multi-source collection in the app dedupes; this one
+        // didn't. Two descriptors from one TV, or two Bonjour instances
+        // resolving to the same address, put duplicate ids in a live-updating
+        // ForEach — which is exactly what spun the view graph before.
+        var seen = Set<String>()
+        list.removeAll { !seen.insert($0.id).inserted }
         targets = list
         if !list.isEmpty { searchedAndEmpty = false }
     }

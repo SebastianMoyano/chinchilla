@@ -21,6 +21,9 @@ final class SnapshotModel {
     func thin() {
         guard !thinning else { return }
         thinning = true
+        BusyDeadline.arm("Snapshots.thinning", .seconds(300)) { [weak self] in
+            self?.thinning ?? false
+        } clear: { [weak self] in self?.thinning = false }
         thinResult = nil
         Task {
             defer { thinning = false }

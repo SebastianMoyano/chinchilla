@@ -110,6 +110,9 @@ final class TabSaverModel {
     func closeDuplicates() {
         guard !closingTabs else { return }
         closingTabs = true
+        BusyDeadline.arm("TabSaver.closing", .seconds(120)) { [weak self] in
+            self?.closingTabs ?? false
+        } clear: { [weak self] in self?.closingTabs = false }
         lastReport = nil
         Task {
             defer { closingTabs = false }

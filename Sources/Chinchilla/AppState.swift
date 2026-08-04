@@ -175,7 +175,9 @@ final class AppState {
     /// unattended, so doing it from a button that asks first is the more
     /// cautious version, not the riskier one.
     func smartClean() {
-        guard !smartCleaning else { return }
+        // Deep Clean can be mid-clean over overlapping items; two passes make
+        // the loser report files the winner already removed.
+        guard !smartCleaning, deepClean.phase != .cleaning else { return }
         let items = smartCleanableItems
         guard !items.isEmpty else { return }
         smartCleaning = true
@@ -202,6 +204,12 @@ final class AppState {
         smartScanDone = false
         smartFreedBytes = nil
         smartCleanFailures = []
+        // This waits on three other models' flags, so it inherits whatever
+        // can go wrong in any of them. It was the one busy flag in the app
+        // with no deadline of its own.
+        BusyDeadline.arm("Dashboard.smartScan", .seconds(180)) { [weak self] in
+            self?.smartScanRunning ?? false
+        } clear: { [weak self] in self?.smartScanRunning = false }
         deepClean.scan()
         devTools.refreshDocker()
         devTools.scanArtifacts()

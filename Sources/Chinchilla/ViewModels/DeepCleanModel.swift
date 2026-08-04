@@ -47,7 +47,10 @@ final class DeepCleanModel {
     }
 
     func scan() {
-        guard phase != .scanning else { return }
+        // Not just .scanning: the menu bar's Smart Scan button has no
+        // disabled state, so it can start a scan while a clean is running —
+        // and then the two Tasks race on phase, report, selected and outcome.
+        guard phase != .scanning, phase != .cleaning else { return }
         phase = .scanning
         hasFullDiskAccess = Permissions.hasFullDiskAccess()
         outcome = nil

@@ -32,6 +32,13 @@ final class DevToolsModel {
 
     func refreshDocker() {
         dockerPhase = .loading
+        BusyDeadline.arm("DevTools.docker", .seconds(60)) { [weak self] in
+            self?.dockerPhase == .loading
+        } clear: { [weak self] in
+            // Docker not answering looks the same as Docker being down, and
+            // that's the honest reading — the daemon isn't usable either way.
+            self?.dockerPhase = .daemonDown
+        }
         lastPruneOutput = nil
         Task {
             switch await DockerClient.state() {
@@ -49,6 +56,9 @@ final class DevToolsModel {
     func prune(_ action: DockerPruneAction) {
         guard !pruneRunning else { return }
         pruneRunning = true
+        BusyDeadline.arm("DevTools.prune", .seconds(300)) { [weak self] in
+            self?.pruneRunning ?? false
+        } clear: { [weak self] in self?.pruneRunning = false }
         Task {
             defer { pruneRunning = false }
             do {

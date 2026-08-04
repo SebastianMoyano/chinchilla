@@ -53,6 +53,9 @@ final class StartupModel {
     func loadFullInventory() {
         guard !btmLoading else { return }
         btmLoading = true
+        BusyDeadline.arm("Startup.btm", .seconds(120)) { [weak self] in
+            self?.btmLoading ?? false
+        } clear: { [weak self] in self?.btmLoading = false }
         btmError = nil
         Task {
             defer { btmLoading = false }
@@ -106,6 +109,9 @@ final class StartupModel {
     func toggle(_ agent: LaunchAgent) {
         guard !busyIDs.contains(agent.id) else { return }
         busyIDs.insert(agent.id)
+        BusyDeadline.arm("Startup.toggle", .seconds(60)) { [weak self] in
+            self?.busyIDs.contains(agent.id) ?? false
+        } clear: { [weak self] in self?.busyIDs.remove(agent.id) }
         errorMessage = nil
         Task {
             defer { busyIDs.remove(agent.id) }

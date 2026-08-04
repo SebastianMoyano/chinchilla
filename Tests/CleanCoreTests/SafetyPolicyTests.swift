@@ -146,3 +146,15 @@ private let cachesRoot = home + "/Library/Caches"
     let clashes = expanded.filter { $0.value.count > 1 }
     #expect(clashes.isEmpty, "rules name the same exact path: \(clashes)")
 }
+
+/// The lesson from the duplicate-path freeze, applied to the other place the
+/// app merges lists from independent sources: no collection that feeds a
+/// SwiftUI ForEach may carry a repeated identity.
+@Test func scanReportIdentitiesSurviveASecondScan() async {
+    let first = await CleanScanner.scan(hasFullDiskAccess: false)
+    let second = await CleanScanner.scan(hasFullDiskAccess: false)
+    for report in [first, second] {
+        let ids = report.items.map(\.id)
+        #expect(Set(ids).count == ids.count)
+    }
+}
