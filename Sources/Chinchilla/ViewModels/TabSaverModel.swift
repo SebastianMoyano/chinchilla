@@ -55,7 +55,26 @@ final class TabSaverModel {
     /// changes and by the watchdog when auto's answer changes.
     static let lastAppliedKey = "tabSaver.lastAppliedLevel"
 
+    /// True while a level is being written, so the `refresh()` at the end of
+    /// that write can't start another one.
+    ///
+    /// The cycle is applyCurrentLevel → refresh → reevaluateAutoIfNeeded →
+    /// applyCurrentLevel, and it was documented as terminating because "the
+    /// level is the same the second time". It isn't: `autoLevel()` reads the
+    /// pressure sysctl live, so a Mac hovering on the normal/warning boundary
+    /// returns a different answer on consecutive reads and the cycle never
+    /// closes. Reproduced with an alternating source: 20 001 nested calls
+    /// before the harness cut it off, each one a cfprefsd round-trip per
+    /// installed browser, all on the main actor.
+    ///
+    /// Skipping one adjustment costs nothing — the Everyday watchdog
+    /// re-evaluates every five minutes, and so does opening the Dashboard.
+    private var applyingLevel = false
+
     func applyCurrentLevel() {
+        guard !applyingLevel else { return }
+        applyingLevel = true
+        defer { applyingLevel = false }
         let level = resolvedLevel
         for state in policyBrowsers {
             BrowserTuner.setPerformanceLevel(level, for: state.browser)
