@@ -566,3 +566,12 @@
 "Free" = "Libre";
 "Used" = "Usado";
 "Purgeable" = "Purgable";
+
+/* Smart Scan: escanear lleva a limpiar (0.13.0) */
+"Scan again" = "Escanear otra vez";
+"Clean %@" = "Limpiar %@";
+"Clean %@?" = "¿Limpiar %@?";
+"Clean" = "Limpiar";
+"Cancel" = "Cancelar";
+"Freed %@ — it's in the Trash if you need it back." = "Liberados %@ — están en la Papelera si los necesitas de vuelta.";
+"%lld items go to the Trash — caches and logs your apps rebuild on their own. Docker and project artifacts aren't included; those have their own screens because they need a look first." = "%lld elementos van a la Papelera — cachés y registros que tus apps reconstruyen solas. Docker y los artefactos de proyectos no se incluyen; tienen su propia pantalla porque conviene mirarlos antes.";

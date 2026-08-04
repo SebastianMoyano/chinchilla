@@ -275,19 +275,53 @@ struct SmartScanCard: View {
                 Text("One click: junk, Docker and old project artifacts.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button {
-                    appState.smartScan()
-                } label: {
-                    if appState.smartScanRunning {
-                        ProgressView().controlSize(.small)
-                            .frame(minWidth: 110)
+                // Once the scan has found something, the obvious next move is
+                // to act on it — "Scan Again" was a dead end that made the
+                // user hunt for where the cleaning happens.
+                HStack(spacing: 10) {
+                    if appState.smartScanDone, appState.smartCleanableBytes > 0 {
+                        Button {
+                            appState.smartCleanConfirming = true
+                        } label: {
+                            if appState.smartCleaning {
+                                ProgressView().controlSize(.small).frame(minWidth: 130)
+                            } else {
+                                Label(
+                                    "Clean \(ByteCountFormatter.string(fromByteCount: appState.smartCleanableBytes, countStyle: .file))",
+                                    systemImage: "sparkles"
+                                )
+                                .frame(minWidth: 130)
+                            }
+                        }
+                        .buttonStyle(ActionButtonStyle())
+                        .disabled(appState.smartCleaning)
+                        Button("Scan again") { appState.smartScan() }
+                            .buttonStyle(.link)
+                            .disabled(appState.smartScanRunning || appState.smartCleaning)
                     } else {
-                        Label(appState.smartScanDone ? "Scan Again" : "Smart Scan", systemImage: "sparkles")
-                            .frame(minWidth: 110)
+                        Button {
+                            appState.smartScan()
+                        } label: {
+                            if appState.smartScanRunning {
+                                ProgressView().controlSize(.small).frame(minWidth: 110)
+                            } else {
+                                Label(appState.smartScanDone ? "Scan again" : "Smart Scan",
+                                      systemImage: "sparkles")
+                                    .frame(minWidth: 110)
+                            }
+                        }
+                        .buttonStyle(ActionButtonStyle())
+                        .disabled(appState.smartScanRunning)
                     }
                 }
-                .buttonStyle(ActionButtonStyle())
-                .disabled(appState.smartScanRunning)
+                if let freed = appState.smartFreedBytes {
+                    Label(
+                        "Freed \(ByteCountFormatter.string(fromByteCount: freed, countStyle: .file)) — it's in the Trash if you need it back.",
+                        systemImage: "checkmark.circle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(Theme.ok)
+                }
             }
             if appState.smartScanDone {
                 Divider().frame(height: 70)
@@ -311,6 +345,19 @@ struct SmartScanCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
+        .confirmationDialog(
+            "Clean \(ByteCountFormatter.string(fromByteCount: appState.smartCleanableBytes, countStyle: .file))?",
+            isPresented: Binding(
+                get: { appState.smartCleanConfirming },
+                set: { appState.smartCleanConfirming = $0 }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Clean") { appState.smartClean() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(appState.smartCleanableItems.count) items go to the Trash — caches and logs your apps rebuild on their own. Docker and project artifacts aren't included; those have their own screens because they need a look first.")
+        }
     }
 
     private func smartRow(_ title: LocalizedStringKey, _ bytes: Int64, _ target: SidebarItem) -> some View {

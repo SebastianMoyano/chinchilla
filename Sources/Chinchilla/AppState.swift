@@ -134,10 +134,54 @@ final class AppState {
         smartCleanBytes + smartDockerBytes + smartArtifactBytes
     }
 
+    // MARK: Smart Clean — the step the scan used to stop short of
+
+    var smartCleaning = false
+    var smartCleanConfirming = false
+    var smartFreedBytes: Int64?
+
+    /// Everything the scan found that is safe to remove and whose app isn't
+    /// running. Docker images and build artefacts are deliberately not here:
+    /// those need a look before they go, and each has its own screen.
+    var smartCleanableItems: [CleanItem] {
+        RunningAppGuard.filterOutConflicts(
+            deepClean.report.items.filter { $0.safety == .safe }
+        )
+    }
+
+    var smartCleanableBytes: Int64 {
+        smartCleanableItems.reduce(0) { $0 + $1.size }
+    }
+
+    /// Runs the clean the scan just justified. Safe categories only, and
+    /// straight to the Trash — the same work the weekly schedule does
+    /// unattended, so doing it from a button that asks first is the more
+    /// cautious version, not the riskier one.
+    func smartClean() {
+        guard !smartCleaning else { return }
+        let items = smartCleanableItems
+        guard !items.isEmpty else { return }
+        smartCleaning = true
+        smartFreedBytes = nil
+        BusyDeadline.arm("Dashboard.smartClean", .seconds(300)) { [weak self] in
+            self?.smartCleaning ?? false
+        } clear: { [weak self] in
+            self?.smartCleaning = false
+        }
+        Task {
+            defer { smartCleaning = false }
+            let outcome = await Cleaner.clean(items: items, dryRun: false)
+            withAnimation(.spring) { smartFreedBytes = outcome.freedBytes }
+            // The numbers on screen are now stale in the user's favour.
+            deepClean.scan()
+        }
+    }
+
     func smartScan() {
         guard !smartScanRunning else { return }
         smartScanRunning = true
         smartScanDone = false
+        smartFreedBytes = nil
         deepClean.scan()
         devTools.refreshDocker()
         devTools.scanArtifacts()
