@@ -70,8 +70,7 @@ struct MemoryCard: View {
                 }
             }
         }
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
         .onAppear { model.refresh() }
     }
 

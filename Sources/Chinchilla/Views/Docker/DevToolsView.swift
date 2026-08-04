@@ -112,8 +112,7 @@ struct DevToolsView: View {
                 }
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     // MARK: Project artifacts
@@ -182,8 +181,7 @@ struct DevToolsView: View {
                 }
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     private func artifactRow(_ model: DevToolsModel, _ artifact: ProjectArtifact) -> some View {

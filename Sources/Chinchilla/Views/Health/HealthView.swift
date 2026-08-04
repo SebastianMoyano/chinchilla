@@ -90,8 +90,7 @@ struct HealthView: View {
                 )
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     private func checkRow(ok: Bool, unknown: Bool, title: LocalizedStringKey, detail: String) -> some View {
@@ -143,8 +142,7 @@ struct HealthView: View {
                 .controlSize(.small)
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     // MARK: Fix-it kit
@@ -180,8 +178,7 @@ struct HealthView: View {
                     .foregroundStyle(.teal)
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     // MARK: Brew services
@@ -213,7 +210,6 @@ struct HealthView: View {
                 }
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 }

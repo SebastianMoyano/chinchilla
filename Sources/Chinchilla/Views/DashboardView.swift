@@ -91,9 +91,8 @@ struct DashboardView: View {
                 snapshotRow
             }
         }
-        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .card()
     }
 
     @ViewBuilder
@@ -143,9 +142,8 @@ struct DashboardView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .card()
     }
 
     private var background: some View {
@@ -391,8 +389,7 @@ struct TabSaverCard: View {
             // 3 — Tab Guard: per-tab smarts via the companion extension
             TabGuardSection()
         }
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
         .onAppear { model.refresh() }
     }
 
@@ -475,8 +472,7 @@ struct AutoCleanCard: View {
                 }
             }
         }
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 }
 

@@ -134,8 +134,7 @@ struct StartupView: View {
                     .foregroundStyle(.red)
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     private func fullInventoryCard(_ model: StartupModel) -> some View {
@@ -193,8 +192,7 @@ struct StartupView: View {
                 .padding(.vertical, 1)
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     private func globalCard(_ model: StartupModel) -> some View {
@@ -216,8 +214,7 @@ struct StartupView: View {
                 .padding(.vertical, 1)
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     private func badge(_ text: LocalizedStringKey, _ color: Color) -> some View {

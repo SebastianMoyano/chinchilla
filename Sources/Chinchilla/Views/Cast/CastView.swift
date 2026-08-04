@@ -158,8 +158,7 @@ struct CastView: View {
                     .foregroundStyle(.red)
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     private func connectManual(_ model: CastModel) {
@@ -242,8 +241,7 @@ struct NowPlayingCard: View {
                 }
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     private func timeString(_ seconds: Double) -> String {

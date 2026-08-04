@@ -59,8 +59,7 @@ struct GamingModeView: View {
             .labelsHidden()
             .tint(.green)
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
         .sheet(isPresented: Binding(
             get: { model.pendingConfirmation },
             set: { model.pendingConfirmation = $0 }
@@ -95,8 +94,7 @@ struct GamingModeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     private func pressureRow(_ model: GamingModel) -> some View {
@@ -212,8 +210,7 @@ struct GamingModeView: View {
 
             focusShortcutRow(model)
         }
-        .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .card()
     }
 
     @State private var availableShortcuts: [String] = []
