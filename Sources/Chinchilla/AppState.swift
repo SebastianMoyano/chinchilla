@@ -139,6 +139,10 @@ final class AppState {
     var smartCleaning = false
     var smartCleanConfirming = false
     var smartFreedBytes: Int64?
+    /// Kept so the card can say what didn't go, and why. Reporting only the
+    /// happy number is how "freed zero" becomes a mystery instead of a
+    /// permissions problem the user could act on.
+    var smartCleanFailures: [CleanFailure] = []
 
     /// Everything the scan found that is safe to remove and whose app isn't
     /// running. Docker images and build artefacts are deliberately not here:
@@ -169,6 +173,7 @@ final class AppState {
         guard !items.isEmpty else { return }
         smartCleaning = true
         smartFreedBytes = nil
+        smartCleanFailures = []
         BusyDeadline.arm("Dashboard.smartClean", .seconds(300)) { [weak self] in
             self?.smartCleaning ?? false
         } clear: { [weak self] in
@@ -177,6 +182,7 @@ final class AppState {
         Task {
             defer { smartCleaning = false }
             let outcome = await Cleaner.clean(items: items, dryRun: false)
+            smartCleanFailures = outcome.failures
             withAnimation(.spring) { smartFreedBytes = outcome.freedBytes }
             // The numbers on screen are now stale in the user's favour.
             deepClean.scan()
@@ -188,6 +194,7 @@ final class AppState {
         smartScanRunning = true
         smartScanDone = false
         smartFreedBytes = nil
+        smartCleanFailures = []
         deepClean.scan()
         devTools.refreshDocker()
         devTools.scanArtifacts()

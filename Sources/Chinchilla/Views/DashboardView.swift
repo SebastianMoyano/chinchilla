@@ -286,10 +286,8 @@ struct SmartScanCard: View {
                             if appState.smartCleaning {
                                 ProgressView().controlSize(.small).frame(minWidth: 130)
                             } else {
-                                Label(
-                                    "Clean \(ByteCountFormatter.string(fromByteCount: appState.smartCleanableBytes, countStyle: .file))",
-                                    systemImage: "sparkles"
-                                )
+                                Label("Clean \(Formatters.bytes(appState.smartCleanableBytes))",
+                                      systemImage: "sparkles")
                                 .frame(minWidth: 130)
                             }
                         }
@@ -320,7 +318,7 @@ struct SmartScanCard: View {
                 if appState.smartScanDone, appState.smartFreedBytes == nil {
                     VStack(alignment: .leading, spacing: 2) {
                         if appState.smartBlockedByAppsBytes > 0 {
-                            Text("Another \(ByteCountFormatter.string(fromByteCount: appState.smartBlockedByAppsBytes, countStyle: .file)) is safe junk from apps you have open — close them and scan again.")
+                            Text("Another \(Formatters.bytes(appState.smartBlockedByAppsBytes)) is safe junk from apps you have open — close them and scan again.")
                         }
                         Text("Docker and project artifacts aren't in that button; they have their own screens.")
                     }
@@ -330,12 +328,37 @@ struct SmartScanCard: View {
                     .frame(maxWidth: 320, alignment: .leading)
                 }
                 if let freed = appState.smartFreedBytes {
-                    Label(
-                        "Freed \(ByteCountFormatter.string(fromByteCount: freed, countStyle: .file)) — it's in the Trash if you need it back.",
-                        systemImage: "checkmark.circle.fill"
-                    )
+                    VStack(alignment: .leading, spacing: 3) {
+                        if freed > 0 {
+                            Label(
+                                "Freed \(Formatters.bytes(freed)) — it's in the Trash if you need it back.",
+                                systemImage: "checkmark.circle.fill"
+                            )
+                            .foregroundStyle(Theme.ok)
+                        } else {
+                            // "Freed Zero KB" was the app looking broken while
+                            // telling the truth. Say what actually happened.
+                            Label("Nothing left to remove here.", systemImage: "checkmark.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                        if !appState.smartCleanFailures.isEmpty {
+                            Label(
+                                "\(appState.smartCleanFailures.count) items wouldn't go — macOS refused them.",
+                                systemImage: "exclamationmark.triangle.fill"
+                            )
+                            .foregroundStyle(Theme.caution)
+                            ForEach(appState.smartCleanFailures.prefix(3), id: \.path) { failure in
+                                Text(verbatim: (failure.path as NSString).lastPathComponent
+                                     + " — " + failure.reason)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
                     .font(.caption)
-                    .foregroundStyle(Theme.ok)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 340, alignment: .leading)
                 }
             }
             if appState.smartScanDone {
@@ -361,7 +384,7 @@ struct SmartScanCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
         .confirmationDialog(
-            "Clean \(ByteCountFormatter.string(fromByteCount: appState.smartCleanableBytes, countStyle: .file))?",
+            "Clean \(Formatters.bytes(appState.smartCleanableBytes))?",
             isPresented: Binding(
                 get: { appState.smartCleanConfirming },
                 set: { appState.smartCleanConfirming = $0 }

@@ -578,3 +578,5 @@
 "found in total" = "encontrado en total";
 "Another %@ is safe junk from apps you have open — close them and scan again." = "Otros %@ son basura segura de apps que tienes abiertas — ciérralas y vuelve a escanear.";
 "Docker and project artifacts aren't in that button; they have their own screens." = "Docker y los artefactos de proyectos no entran en ese botón; tienen su propia pantalla.";
+"Nothing left to remove here." = "Ya no queda nada que quitar aquí.";
+"%lld items wouldn't go — macOS refused them." = "%lld elementos no se pudieron quitar — macOS los rechazó.";

@@ -196,3 +196,20 @@ struct DataValue: View {
             .monospacedDigit()
     }
 }
+
+/// Byte sizes, formatted once and the same way everywhere.
+///
+/// `ByteCountFormatter` renders zero as "Zero KB" by default, which reads as
+/// a bug when it lands in a sentence — "Freed Zero KB" was exactly that.
+enum Formatters {
+    nonisolated(unsafe) private static let byteFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.allowsNonnumericFormatting = false
+        return formatter
+    }()
+
+    static func bytes(_ value: Int64) -> String {
+        byteFormatter.string(fromByteCount: value)
+    }
+}
