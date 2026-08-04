@@ -183,7 +183,7 @@ struct CastView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Label("No TVs found", systemImage: "questionmark.circle")
                             .font(.callout.weight(.medium))
-                        Text("Checklist: the TV is ON and on the SAME Wi-Fi as this Mac (not a guest network); if your router has \"AP isolation\" or \"client isolation\", turn it off. Most smart TVs answer over DLNA without installing anything — if yours doesn't, install FCast Receiver (Android TV) or use the manual connection below.")
+                        Text("Checklist: the TV is ON and on the SAME network as this Mac (not a guest one); if your router has \"AP isolation\" or \"client isolation\", turn it off. If this Mac is on Ethernet and the TV is on Wi-Fi, many routers won't pass the discovery traffic between the two — Apple TV and Chromecast are found that way, so they go missing while DLNA sets still appear. Otherwise use the manual connection below.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

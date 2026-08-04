@@ -60,6 +60,7 @@ struct MenuBarView: View {
                 Label("Everyday mode", systemImage: "bolt.heart.fill")
             }
             .toggleStyle(.switch)
+            .help("Sleeps background tabs, schedules the weekly clean, and warns you when memory gets tight.")
 
             Toggle(isOn: Binding(
                 get: { appState.gaming.isActive },
@@ -68,14 +69,18 @@ struct MenuBarView: View {
                 Label("Gaming mode", systemImage: "gamecontroller.fill")
             }
             .toggleStyle(.switch)
+            .help("Keeps the Mac awake, pauses Time Machine and freezes the background apps you chose. Everything comes back when you turn it off.")
 
             Toggle(isOn: Binding(
                 get: { appState.desktopWidget.isVisible },
                 set: { _ in appState.desktopWidget.toggle() }
             )) {
-                Label("Desktop widget", systemImage: "gauge.medium")
+                // "Desktop widget" said what it is, not what it does — and a
+                // person who hasn't seen it has no way to guess.
+                Label("Free space on the desktop", systemImage: "gauge.medium")
             }
             .toggleStyle(.switch)
+            .help("Pins a small ring to your desktop showing how much disk is left. It sits behind your windows, on every Space, so you only see it when the desktop shows.")
 
             Toggle(isOn: Binding(
                 get: { UserDefaults.standard.bool(forKey: AppDelegate.keepInMenuBarKey) },

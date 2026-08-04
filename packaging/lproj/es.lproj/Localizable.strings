@@ -610,3 +610,8 @@
 "Stop" = "Detener";
 "%@ on %@" = "%1$@ en %2$@";
 "Find a TV" = "Buscar un TV";
+"Free space on the desktop" = "Espacio libre en el escritorio";
+"Pins a small ring to your desktop showing how much disk is left. It sits behind your windows, on every Space, so you only see it when the desktop shows." = "Fija un anillo pequeño en tu escritorio con cuánto disco queda. Va detrás de tus ventanas, en todos los Espacios, así que solo lo ves cuando se ve el escritorio.";
+"Sleeps background tabs, schedules the weekly clean, and warns you when memory gets tight." = "Duerme las pestañas de fondo, programa la limpieza semanal y te avisa cuando la memoria se aprieta.";
+"Keeps the Mac awake, pauses Time Machine and freezes the background apps you chose. Everything comes back when you turn it off." = "Mantiene el Mac despierto, pausa Time Machine y congela las apps de fondo que elegiste. Todo vuelve al apagarlo.";
+"Checklist: the TV is ON and on the SAME network as this Mac (not a guest one); if your router has \"AP isolation\" or \"client isolation\", turn it off. If this Mac is on Ethernet and the TV is on Wi-Fi, many routers won't pass the discovery traffic between the two — Apple TV and Chromecast are found that way, so they go missing while DLNA sets still appear. Otherwise use the manual connection below." = "Revisa: el TV está ENCENDIDO y en la MISMA red que este Mac (no en una de invitados); si tu router tiene \"aislamiento de clientes\", apágalo. Si este Mac está por cable y el TV en WiFi, muchos routers no pasan el tráfico de descubrimiento entre ambos — el Apple TV y el Chromecast se encuentran por esa vía, así que desaparecen mientras los TV con DLNA sí aparecen. Si no, usa la conexión manual de abajo.";
