@@ -24,6 +24,21 @@ public enum MirrorQuality: String, Sendable, CaseIterable {
 
 /// What gets sent to the TV: the desk you already have, a new one, or one
 /// window parked over there.
+/// Which side of the real screen the extra desktop sits on. macOS drops a new
+/// display wherever it likes, and then the mouse leaves the wrong edge — which
+/// feels broken even though nothing is.
+public enum ExtendedSide: String, Sendable, Hashable, CaseIterable, Identifiable {
+    case left, right
+    public var id: String { rawValue }
+    /// Plain string: CastKit has no SwiftUI, and the app localises it.
+    public var labelKey: String {
+        switch self {
+        case .left: "To the left"
+        case .right: "To the right"
+        }
+    }
+}
+
 public enum MirrorSource: Sendable, Hashable {
     case wholeScreen
     /// A genuine second desktop, created in software and sent to the TV —
@@ -158,9 +173,25 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
             }
     }
 
+    /// Puts the virtual display beside the real one. `kCGConfigureForSession`
+    /// rather than permanently: this display is temporary, and there's no
+    /// reason for it to leave a mark on the user's saved arrangement.
+    static func place(display: CGDirectDisplayID, on side: ExtendedSide, size: (Int, Int)) {
+        let mainBounds = CGDisplayBounds(CGMainDisplayID())
+        let x: Int32 = side == .left
+            ? -Int32(size.0)
+            : Int32(mainBounds.width)
+        var configuration: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&configuration) == .success,
+              let configuration else { return }
+        CGConfigureDisplayOrigin(configuration, display, x, 0)
+        CGCompleteDisplayConfiguration(configuration, .forSession)
+    }
+
     public func start(
         quality: MirrorQuality, includeAudio: Bool, frameRate: Int = 30,
-        source: MirrorSource = .wholeScreen
+        source: MirrorSource = .wholeScreen,
+        extendedSide: ExtendedSide = .right
     ) async throws {
         guard !isRunning else { return }
         store.reset()
@@ -184,6 +215,7 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
                 ])
             }
             self.virtualDisplay = virtual
+            Self.place(display: virtual.displayID, on: extendedSide, size: (w, h))
             let content = try await withTimeout(.seconds(8), "Screen capture") {
                 Unchecked(try await SCShareableContent.excludingDesktopWindows(
                     false, onScreenWindowsOnly: false

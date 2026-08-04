@@ -594,3 +594,7 @@
 "macOS copies sound rather than moving it, so without this you hear everything twice. The Mac gets its sound back when you stop." = "macOS copia el sonido en vez de moverlo, así que sin esto lo escuchas todo dos veces. El Mac recupera su sonido al detener.";
 "Couldn't reach that TV." = "No se pudo conectar con ese TV.";
 "Window" = "Ventana";
+"Where should it sit?" = "¿De qué lado queda?";
+"To the left" = "A la izquierda";
+"To the right" = "A la derecha";
+"Pick the side the TV actually stands on, so the pointer crosses over the right edge." = "Elige el lado donde está el TV de verdad, para que el puntero cruce por el borde correcto.";

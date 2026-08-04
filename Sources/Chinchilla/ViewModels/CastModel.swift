@@ -130,6 +130,10 @@ final class CastModel {
     /// room, so the room's speakers should have it and the laptop shouldn't.
     /// Extending means you're still working here, so it stays here.
     var muteMacWhileCasting = true
+    /// Which side the second desktop lands on. Getting this wrong means the
+    /// pointer leaves by the wrong edge, which feels broken even though
+    /// nothing is.
+    var extendedSide: ExtendedSide = .right
     var availableWindows: [MirrorSource] = []
     var loadingWindows = false
     private var fastMirror: CastMirrorSession?
@@ -284,7 +288,7 @@ final class CastModel {
                 let fast = CastMirrorSession(
                     host: device.host, quality: mirrorQuality,
                     includeAudio: mirrorAudio, source: mirrorSource,
-                    playoutDelayMs: mirrorDelayMs
+                    extendedSide: extendedSide, playoutDelayMs: mirrorDelayMs
                 )
                 fast.onStopped = { message in
                     Task { @MainActor [weak self] in
@@ -370,7 +374,7 @@ final class CastModel {
                 }
                 try await streamer.start(
                     quality: mirrorQuality, includeAudio: mirrorAudio,
-                    source: mirrorSource
+                    source: mirrorSource, extendedSide: extendedSide
                 )
                 // Don't hand the TV a playlist before the first segment exists.
                 // Progressive needs only the init segment; HLS wants a few

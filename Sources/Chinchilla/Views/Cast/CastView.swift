@@ -93,6 +93,28 @@ struct CastView: View {
                 }
             }
 
+            if model.castMode == .extendDisplay {
+                HStack(spacing: 10) {
+                    Text("Where should it sit?")
+                        .font(.callout)
+                    Picker("", selection: Binding(
+                        get: { model.extendedSide },
+                        set: { model.extendedSide = $0 }
+                    )) {
+                        ForEach(ExtendedSide.allCases) { side in
+                            Text(LocalizedStringKey(side.labelKey)).tag(side)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 230)
+                    Spacer()
+                }
+                Text("Pick the side the TV actually stands on, so the pointer crosses over the right edge.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
             if model.castMode == .window {
                 HStack(spacing: 10) {
                     Picker("Window", selection: Binding(

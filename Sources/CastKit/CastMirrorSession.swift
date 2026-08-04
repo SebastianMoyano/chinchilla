@@ -30,6 +30,7 @@ public final class CastMirrorSession: @unchecked Sendable {
     public let frameRate: Int
     public let includeAudio: Bool
     public let source: MirrorSource
+    public let extendedSide: ExtendedSide
     public private(set) var playoutDelayMs: Int
     /// False when the receiver took video but turned audio down, so the UI
     /// can say so instead of leaving the user wondering.
@@ -51,6 +52,7 @@ public final class CastMirrorSession: @unchecked Sendable {
         host: String, quality: MirrorQuality = .p720,
         frameRate: Int = 30, includeAudio: Bool = true,
         source: MirrorSource = .wholeScreen,
+        extendedSide: ExtendedSide = .right,
         playoutDelayMs: Int = CastStreaming.defaultTargetDelayMs
     ) {
         self.host = host
@@ -58,6 +60,7 @@ public final class CastMirrorSession: @unchecked Sendable {
         self.frameRate = frameRate
         self.includeAudio = includeAudio
         self.source = source
+        self.extendedSide = extendedSide
         self.playoutDelayMs = playoutDelayMs
     }
 
@@ -174,7 +177,7 @@ public final class CastMirrorSession: @unchecked Sendable {
         streamer.onStopped = { [weak self] message in self?.onStopped?(message) }
         try await streamer.start(
             quality: quality, includeAudio: audioAccepted, frameRate: frameRate,
-            source: source
+            source: source, extendedSide: extendedSide
         )
 
         self.encoder = encoder
