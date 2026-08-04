@@ -69,8 +69,13 @@ enum CastProto {
                 guard let (_, after) = readVarint(data, from: index) else { return nil }
                 index = after
             } else if wire == 2 {
-                guard let (length, after) = readVarint(data, from: index) else { return nil }
-                let end = data.index(after, offsetBy: Int(length), limitedBy: data.endIndex) ?? data.endIndex
+                guard let (length, after) = readVarint(data, from: index),
+                      // A ten-byte varint can name a length past Int.max, and
+                      // `Int(_:)` traps rather than failing. Every byte here
+                      // comes off the network from a device whose certificate
+                      // we don't verify, so this was a remote kill switch.
+                      let count = Int(exactly: length), count >= 0 else { return nil }
+                let end = data.index(after, offsetBy: count, limitedBy: data.endIndex) ?? data.endIndex
                 let value = String(decoding: data[after..<end], as: UTF8.self)
                 if field == 4 { namespace = value }
                 if field == 6 { payload = value }
@@ -209,10 +214,21 @@ public actor GoogleCastSession {
         }
     }
 
+    /// Generous for a control channel that carries JSON status messages.
+    private static let maxFrameBytes = 256 * 1024
+
     private func handleReceive(_ data: Data?, isComplete: Bool, error: NWError?) {
         if let data { buffer.append(data) }
         while buffer.count >= 4 {
             let length = buffer.prefix(4).withUnsafeBytes { Int(UInt32(bigEndian: $0.loadUnaligned(as: UInt32.self))) }
+            // Every other framer in the app caps its frame; this one didn't,
+            // so a peer announcing 4 GB and then dribbling bytes grew the
+            // buffer until the app died. Cast control messages are small.
+            guard length <= Self.maxFrameBytes else {
+                connection.cancel()
+                continuation?.yield(.state(.closed))
+                return
+            }
             guard buffer.count >= 4 + length else { break }
             let message = Data(buffer[(buffer.startIndex + 4)..<(buffer.startIndex + 4 + length)])
             buffer.removeFirst(4 + length)

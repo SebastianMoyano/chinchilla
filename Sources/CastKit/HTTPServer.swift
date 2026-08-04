@@ -10,6 +10,8 @@ public final class CastHTTPServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "cast.http")
     private var listener: NWListener?
     private let files = NSMutableDictionary()  // token -> file URL (queue-confined)
+    /// Every accepted connection, so `stopAll` can actually stop them.
+    private let live = Locked<[NWConnection]>([])
     public private(set) var port: UInt16 = 0
     /// Diagnostics hook: every request path the client asks for.
     public var onRequest: (@Sendable (String, String) -> Void)?
@@ -33,10 +35,24 @@ public final class CastHTTPServer: @unchecked Sendable {
         listener.start(queue: queue)
     }
 
+    /// Cancels the listener *and* everything it handed out. Cancelling only
+    /// the listener left every accepted connection alive — a TV that stops
+    /// reading parks its response task forever holding a file handle, and each
+    /// cast restart added another set.
     public func stopAll() {
         listener?.cancel()
         listener = nil
-        queue.sync { files.removeAllObjects() }
+        let open = live.withLock { connections -> [NWConnection] in
+            let all = connections
+            connections.removeAll()
+            return all
+        }
+        for connection in open { connection.cancel() }
+        queue.sync {
+            files.removeAllObjects()
+            streamRoutes.removeAll()
+            prefixRoutes.removeAll()
+        }
         port = 0
     }
 
@@ -94,6 +110,15 @@ public final class CastHTTPServer: @unchecked Sendable {
     // MARK: - Request handling
 
     private func handle(_ connection: NWConnection) {
+        live.withLock { $0.append(connection) }
+        connection.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .cancelled, .failed:
+                self?.live.withLock { $0.removeAll { $0 === connection } }
+            default:
+                break
+            }
+        }
         connection.start(queue: queue)
         receiveRequest(connection, buffered: Data())
     }

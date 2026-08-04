@@ -384,3 +384,43 @@ struct CastStreamingOfferTests {
         #expect(CastStreaming.Answer(json: ["answer": ["result": "error"]]) == nil)
     }
 }
+
+@Suite("A hostile TV can't take the app down")
+struct CastProtocolHardeningTests {
+    /// Field 4, wire type 2, then a ten-byte varint naming a length above
+    /// Int.max. `Int(_:)` traps on that — and the Cast session accepts any
+    /// certificate, so anyone able to answer on port 8009 could send it.
+    @Test("An oversized length is refused, not fatal")
+    func oversizedVarintLength() {
+        var message = Data([0x22])
+        message.append(contentsOf: [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01])
+        #expect(CastProto.decode(message) == nil)
+    }
+
+    @Test("A length longer than the data is clamped, not read past")
+    func lengthBeyondBuffer() {
+        // Field 4, wire type 2, length 100, but only four bytes follow.
+        // (Under 128, so it's a single-byte varint and doesn't swallow the
+        // first character of the payload — which my first attempt did.)
+        var message = Data([0x22, 100])
+        message.append(contentsOf: Array("hola".utf8))
+        let decoded = CastProto.decode(message)
+        #expect(decoded?.namespace == "hola")
+    }
+
+    @Test("A varint that never terminates is refused")
+    func unterminatedVarint() {
+        #expect(CastProto.decode(Data(repeating: 0xFF, count: 12)) == nil)
+    }
+
+    @Test("Well-formed messages still decode")
+    func stillDecodesRealMessages() {
+        var message = Data([0x22, UInt8("urn:x-cast:test".utf8.count)])
+        message.append(contentsOf: Array("urn:x-cast:test".utf8))
+        message.append(contentsOf: [0x32, UInt8("{\"a\":1}".utf8.count)])
+        message.append(contentsOf: Array("{\"a\":1}".utf8))
+        let decoded = CastProto.decode(message)
+        #expect(decoded?.namespace == "urn:x-cast:test")
+        #expect(decoded?.payload == "{\"a\":1}")
+    }
+}

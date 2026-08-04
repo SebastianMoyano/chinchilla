@@ -303,8 +303,8 @@ final class CastModel {
                     includeAudio: mirrorAudio, source: mirrorSource,
                     extendedSide: extendedSide, playoutDelayMs: mirrorDelayMs
                 )
-                fast.onStopped = { message in
-                    Task { @MainActor [weak self] in
+                fast.onStopped = { [weak self] message in
+                    Task { @MainActor in
                         self?.mirroring = false
                         if let message { self?.mirrorError = message }
                     }
@@ -324,6 +324,8 @@ final class CastModel {
                     applyMuteIfWanted()
                     return
                 } catch {
+                    // The session may have got as far as opening a socket.
+                    await fast.stop()
                     guard mirrorGeneration == generation else { return }
                     mirrorUsingFallback = true
                 }
@@ -379,8 +381,8 @@ final class CastModel {
                     }
                     return nil
                 }
-                streamer.onStopped = { message in
-                    Task { @MainActor [weak self] in
+                streamer.onStopped = { [weak self] message in
+                    Task { @MainActor in
                         self?.mirroring = false
                         if let message { self?.mirrorError = message }
                     }
@@ -467,8 +469,10 @@ final class CastModel {
                 return
             }
             await streamer.stop()
-            server.setPrefixRoute("/mirror/", handler: nil)
-            server.setStreamRoute("/mirror/live.mp4", handler: nil)
+            // Not just the routes: the listener and every connection it handed
+            // out. Leaving it running kept a socket open and its token table
+            // growing for the life of the app.
+            server.stopAll()
             switch target?.kind {
             case .googlecast: await castSession?.stop()
             case .fcast: await session?.stop()
@@ -484,20 +488,20 @@ final class CastModel {
         // FCast: continuous Bonjour browse.
         if discoveryState != .browsing {
             discovery.start(
-                onDevices: { devices in
-                    Task { @MainActor [weak self] in
+                onDevices: { [weak self] devices in
+                    Task { @MainActor in
                         self?.fcastDevices = devices
                         self?.rebuildTargets()
                     }
                 },
-                onState: { state in
-                    Task { @MainActor [weak self] in self?.discoveryState = state }
+                onState: { [weak self] state in
+                    Task { @MainActor in self?.discoveryState = state }
                 }
             )
         }
         // Google Cast (Chromecast built-in): continuous Bonjour browse.
-        castDiscovery.start { devices in
-            Task { @MainActor [weak self] in
+        castDiscovery.start { [weak self] devices in
+            Task { @MainActor in
                 self?.castDevices = devices
                 self?.rebuildTargets()
             }

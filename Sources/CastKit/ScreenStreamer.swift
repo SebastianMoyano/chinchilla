@@ -301,7 +301,13 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
     }
 
     public func stop() async {
-        guard isRunning else { return }
+        // Not `guard isRunning`: that flag is set on the last line of start(),
+        // so a throw anywhere before it left the virtual display and the
+        // segmenter allocated and unreachable. On the app-lifetime streamer
+        // that meant a phantom monitor until the app quit.
+        guard isRunning || stream != nil || virtualDisplay != nil || segmenter != nil else {
+            return
+        }
         isRunning = false
         // Stop delivering frames before tearing anything down, so a callback
         // can't land on a half-released encoder.
