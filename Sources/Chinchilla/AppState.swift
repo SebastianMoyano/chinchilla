@@ -153,6 +153,12 @@ final class AppState {
         smartCleanableItems.reduce(0) { $0 + $1.size }
     }
 
+    /// Safe junk that can't go right now because its app is open. Naming it
+    /// is the difference between "the button is broken" and "close Chrome".
+    var smartBlockedByAppsBytes: Int64 {
+        max(0, smartCleanBytes - smartCleanableBytes)
+    }
+
     /// Runs the clean the scan just justified. Safe categories only, and
     /// straight to the Trash — the same work the weekly schedule does
     /// unattended, so doing it from a button that asks first is the more

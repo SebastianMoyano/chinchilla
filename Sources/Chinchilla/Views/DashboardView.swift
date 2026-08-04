@@ -314,6 +314,21 @@ struct SmartScanCard: View {
                         .disabled(appState.smartScanRunning)
                     }
                 }
+                // Three numbers on one card that don't add up read as a bug.
+                // Both gaps get named: what the button doesn't cover, and
+                // what it can't reach yet.
+                if appState.smartScanDone, appState.smartFreedBytes == nil {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if appState.smartBlockedByAppsBytes > 0 {
+                            Text("Another \(ByteCountFormatter.string(fromByteCount: appState.smartBlockedByAppsBytes, countStyle: .file)) is safe junk from apps you have open — close them and scan again.")
+                        }
+                        Text("Docker and project artifacts aren't in that button; they have their own screens.")
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 320, alignment: .leading)
+                }
                 if let freed = appState.smartFreedBytes {
                     Label(
                         "Freed \(ByteCountFormatter.string(fromByteCount: freed, countStyle: .file)) — it's in the Trash if you need it back.",
@@ -330,7 +345,7 @@ struct SmartScanCard: View {
                         .font(.system(size: 30, weight: .heavy, design: .rounded))
                         .foregroundStyle(Theme.primary)
                         .contentTransition(.numericText())
-                    Text("reclaimable")
+                    Text("found in total")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
