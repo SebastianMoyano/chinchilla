@@ -1,118 +1,141 @@
-# Chinchilla 🐭✨
+# Chinchilla
 
-App nativa de limpieza y optimización para macOS, inspirada en [Mole](https://github.com/tw93/Mole) y CleanMyMac — pero honesta. Hecha en SwiftUI (Swift 6), compila **sin Xcode** (solo Command Line Tools) y no tiene ninguna dependencia externa.
+Limpieza y mantenimiento de macOS, en una app nativa. SwiftUI y Swift 6, sin dependencias externas, compila sin Xcode.
 
-> Como las chinchillas: se limpia con baños de polvo. 🛁
+**[Descargar la última versión](https://github.com/SebastianMoyano/chinchilla/releases/latest)** · macOS 15+ · Apple Silicon e Intel · firmada y notarizada
 
-## Módulos
+---
 
-| Módulo | Qué hace |
+## Por qué existe
+
+Administro los Mac de un colegio. La tarea que más se repite es la más aburrida: equipos que se llenan, se ponen lentos y nadie sabe por qué. Revisarlos uno por uno a mano no escala, y las herramientas comerciales del rubro cuestan por licencia y además exageran — inventan gigabytes, prometen acelerar cosas que no aceleran y venden el miedo antes que el arreglo.
+
+Quería algo que pudiera dejar instalado y que un profesor pudiera abrir sin saber qué es una caché.
+
+También escribo software, así que la máquina de trabajo tiene otro problema distinto: imágenes de Docker, `node_modules` de proyectos que abandoné, artefactos de compilación. Eso no aparece en ningún limpiador comercial porque no es su público. Como la app ya recorría el disco, agregarlo era barato. El mismo criterio explica el resto: cada módulo entró porque yo tenía ese problema y ya existía la maquinaria para resolverlo.
+
+## En qué se inspira
+
+En [Mole](https://github.com/tw93/Mole), de tw93: la idea de un limpiador de macOS libre, rápido y sin adornos. Chinchilla no reutiliza su código — está escrita desde cero en Swift — pero le debe el enfoque.
+
+El nombre sigue la broma: las chinchillas se limpian revolcándose en polvo.
+
+## Qué hace
+
+| | |
 |---|---|
-| **Smart Scan** | Un clic desde el Dashboard o la barra de menú: combina limpieza segura + Docker + artefactos y muestra el total recuperable. |
-| **Limpieza profunda** | Caches de apps y navegadores, logs, instaladores viejos, basura de desarrollo. Flujo escanear → revisar → limpiar, con *vista previa (dry-run) por defecto*. |
-| **Desinstalador** | Desinstala apps junto con sus restos (Application Support, Preferences, Containers, LaunchAgents, etc.), todo a la Papelera. |
-| **Espacio en disco** | Escaneo paralelo con `fts(3)`, drill-down por carpetas, treemap interactivo y buscador de archivos grandes (≥100 MB). |
-| **Modo gaming** | Mantiene el Mac despierto (IOPMAssertion), detiene backups de Time Machine, cierra apps en segundo plano (con relanzado en un clic) y muestra CPU/GPU/presión de memoria/temperatura en un overlay flotante. **Sin humo**: no hay "purge" de RAM ni contador de FPS falso. |
-| **Docker & Dev** | Estado del daemon, `docker system df`, prunes por categoría (seguro/profundo/build cache/volúmenes) y cazador de `node_modules`, `target`, `.venv` y `Pods` en proyectos viejos. |
-| **Inicio** | Gestiona los launch agents que se cargan al iniciar sesión: apágalos/enciéndelos con un switch (reversible), y acceso directo a los Ítems de inicio de macOS. |
-| **Duplicados** | Archivos idénticos (por contenido, SHA-256) en tus carpetas de usuario, agrupados por espacio desperdiciado; siempre conserva al menos una copia. |
-| **Auto-clean semanal** | LaunchAgent propio que corre la app headless los domingos: limpia solo categorías seguras y notifica lo liberado. |
-| **Widget de escritorio** | Anillo de espacio libre anclado al escritorio (todas las Spaces, detrás de tus ventanas), activable desde la barra de menú. |
-| **Tab Saver** | Para acumuladores de pestañas: activa el Memory Saver de Chrome/Edge/Brave por política de usuario (las pestañas en segundo plano dejan de renderizar) y cierra pestañas duplicadas en Chrome y Safari. Reversible; se avisa que el navegador mostrará "Administrado por tu organización". |
+| **Dashboard** | Smart Scan: un clic combina limpieza segura, Docker y artefactos, y muestra el total recuperable. |
+| **Limpieza profunda** | Cachés, logs, instaladores viejos, basura de desarrollo. Escanear → revisar → limpiar, con vista previa por defecto. |
+| **Desinstalador** | Saca la app y sus restos: Application Support, Preferences, Containers, LaunchAgents. Todo a la Papelera. |
+| **Espacio en disco** | Recorrido paralelo con `fts(3)`, treemap interactivo, buscador de archivos grandes. |
+| **Salud** | SMART del disco, ciclos y capacidad de la batería, procesos zombis, gestión MDM, tiempo desde el último reinicio. Botiquín de reparaciones y control de servicios de Homebrew. |
+| **Modo juego** | Mantiene el Mac despierto, pausa Time Machine, congela apps de fondo (reversible) y muestra CPU, GPU, memoria y temperatura en un overlay. |
+| **Modo diario** | El hermano del anterior para el uso de todos los días: pestañas que duermen, limpieza semanal programada y vigilancia de la presión de memoria. |
+| **Docker y dev** | Estado del daemon, `docker system df`, prunes por categoría, y cazador de `node_modules`, `target`, `.venv` y `Pods` en proyectos viejos. |
+| **Inicio** | Los launch agents que se cargan al iniciar sesión, con interruptor reversible. |
+| **Cast** | Envía archivos al televisor y duplica la pantalla por Google Cast, DLNA o FCast. Ver abajo. |
+| **Duplicados** | Archivos idénticos por contenido (SHA-256), agrupados por espacio desperdiciado. Siempre conserva una copia. |
+| **Doctor de memoria** | Qué está consumiendo la RAM, en lenguaje llano: agrupa los procesos ayudantes bajo la app que los lanzó. |
 
-También: ícono en la barra de menú con stats rápidas, onboarding en el primer arranque, y aviso de actualizaciones **pasivo** (una cápsula discreta en la toolbar cuando hay versión nueva en GitHub Releases — jamás un popup).
+Además: icono en la barra de menús que muestra el modo activo, widget de espacio libre en el escritorio, limpieza automática semanal, y extensión opcional de Chrome para gestionar pestañas.
 
-## Compilar y ejecutar
+## Lo que deliberadamente no hace
 
-Requisitos: macOS 15+, Swift 6.1+ (Command Line Tools bastan). Corre en cualquier Mac: Apple Silicon (M1+, MacBook Neo con A18 Pro) e Intel — el release se compila universal (`CHINCHILLA_UNIVERSAL=1`).
+Esto es la mitad del punto, así que va explícito:
 
-```bash
-./scripts/build-app.sh          # release → dist/Chinchilla.app (firma con tu Developer ID si existe)
-cp -R dist/Chinchilla.app /Applications/   # "instalar" la nueva versión
+- **No libera RAM.** El "purge" de memoria no acelera nada en macOS moderno; el sistema ya administra eso mejor que cualquier app.
+- **No muestra FPS inventados** ni promete cuadros por segundo que no puede entregar.
+- **No apaga Spotlight** ni servicios del sistema para simular mejoras.
+- **No borra idiomas** de las apps: rompe la firma y ahorra una miseria.
+- **No pide contraseña de administrador** salvo para dos reparaciones puntuales, y lo dice antes.
+- **No infla las cifras.** Lo que reporta es lo que se libera.
 
-./scripts/dev-run.sh            # build debug + abrir
-swift test                      # tests (SafetyPolicy, walker, cleaner)
-```
+Cada optimización que sí incluye es real, reversible y sin root.
 
-> ⚠️ Prueba las funciones de limpieza siempre desde el bundle (`dist/Chinchilla.app`), nunca con `swift run`: los permisos TCC (Full Disk Access) se asocian al bundle.
+## Casting y espejo de pantalla
 
-## Full Disk Access (opcional pero recomendado)
+Empezó como un pedido simple —mandar un video al televisor sin instalar nada— y terminó implementando tres protocolos desde cero: Google Cast v2 (protobuf a mano sobre TLS), DLNA/UPnP y FCast.
 
-Sin FDA, Safari, la Papelera y otras rutas protegidas no se pueden medir ni limpiar (la app lo indica con un banner).
+El espejo de pantalla usa el receptor de duplicación que traen los dispositivos Chromecast, el mismo que usa Chrome para "Transmitir escritorio": nada que instalar en el televisor y **menos de medio segundo de retraso**, contra los dos o tres segundos del reproductor multimedia normal. Captura con ScreenCaptureKit, codifica H.264 por hardware con VideoToolbox y Opus para el audio, y transporta RTP cifrado con AES-128-CTR, con retransmisión y reportes RTCP.
 
-1. Ajustes del Sistema → Privacidad y seguridad → **Acceso total al disco**
-2. `+` → selecciona `dist/Chinchilla.app`
+Si un televisor rechaza ese camino, cae al anterior y lo dice en pantalla.
 
-**Nota sobre la firma:** el script firma ad-hoc por defecto, y macOS puede olvidar el permiso FDA en cada rebuild (cambia el cdhash). Para que sobreviva:
+## Seguridad al borrar
 
-1. Acceso a Llaveros → Asistente de Certificados → Crear certificado…
-2. Nombre: `Chinchilla Dev`, tipo: **Firma de código**
-3. Recompila: el script detecta el certificado y lo usa automáticamente.
-
-## Seguridad del borrado
-
-- **Dry-run por defecto**: el botón dice "Previsualizar limpieza" hasta que apagues el switch.
-- `SafetyPolicy` valida **cada path en el momento de borrar** (no solo al escanear): denylist absoluta (`/System`, iCloud Drive, Keychains, Mail, Fotos, `/private/var/…`), resolución de symlinks, raíces declaradas por regla, flags SIP/immutable.
-- Por defecto se borra a la Papelera; solo los caches `safe` se eliminan directo.
+- **Vista previa por defecto.** El botón dice "Previsualizar limpieza" hasta que apagues el interruptor.
+- `SafetyPolicy` valida **cada ruta en el momento de borrar**, no solo al escanear: lista negra absoluta (`/System`, iCloud Drive, llaveros, Mail, Fotos, `/private/var/…`), resolución de enlaces simbólicos, raíces declaradas por regla, banderas SIP e inmutable.
+- Se borra a la Papelera. Solo las cachés clasificadas como seguras se eliminan directo.
 - Todo queda registrado en `~/Library/Logs/Chinchilla/clean-history.jsonl`.
 
-## Tab Guard (extensión de Chrome opcional)
+## Línea de comandos
 
-En `extension/tabguard/` vive una extensión MV3 (JS puro, sin build) que agrega inteligencia **por pestaña**: duerme pestañas según tu inactividad real, hace *cold save* de las que llevan días sin tocar (guardadas y restaurables, nunca perdidas), y cuando activas el modo gaming duerme todas las pestañas de fondo y pausa sus videos. Habla con la app por Native Messaging (framing de 32 bits, host = el propio binario detectando `chrome-extension://` en argv). El manifest del conector es por usuario (cubre todos los perfiles); la extensión se carga una vez por perfil — la app te guía (Dashboard → Tab Saver → paso 3). Multi-perfil: las estadísticas agregan todas las conexiones activas.
-
-## CLI
-
-El mismo binario funciona como herramienta de línea de comandos, con la misma SafetyPolicy, guarda de apps abiertas y registro de auditoría que la GUI:
+El mismo binario es una herramienta de consola, con la misma política de seguridad y el mismo registro que la interfaz:
 
 ```bash
 alias chinchilla="/Applications/Chinchilla.app/Contents/MacOS/Chinchilla"
-chinchilla scan            # tabla de basura encontrada por categoría
-chinchilla scan --json     # ídem, JSON por ítem (para scripts)
-chinchilla clean           # dry-run de categorías seguras
+
+chinchilla scan            # basura encontrada, por categoría
+chinchilla scan --json     # lo mismo en JSON, para scripts
+chinchilla clean           # vista previa de las categorías seguras
 chinchilla clean --real    # limpia de verdad
 ```
 
-## Publicar una versión (DMG firmado y notarizado)
+Útil justamente para el caso del colegio: se puede correr por SSH o desde una tarea programada.
 
-Requisitos una sola vez:
+## Compilar
 
-1. **Certificado**: "Developer ID Application" instalado en el Llavero (ya lo tienes ✓).
-2. **Credenciales de notarización**:
-   ```bash
-   xcrun notarytool store-credentials chinchilla-notary \
-     --apple-id TU_APPLE_ID --team-id 8457F927YF \
-     --password CONTRASEÑA_ESPECÍFICA_DE_APP
-   ```
-   La contraseña específica de app se crea en https://account.apple.com → Inicio de sesión y seguridad.
-
-Luego, cada release:
+Requiere macOS 15+ y Swift 6.1+. Las Command Line Tools bastan — no hace falta Xcode.
 
 ```bash
-# 1. sube la versión en packaging/Info.plist (CFBundleShortVersionString y CFBundleVersion)
-./scripts/release.sh
-# → dist/Chinchilla-X.Y.Z.dmg  firmado, notarizado y con staple
+./scripts/build-app.sh                      # → dist/Chinchilla.app
+cp -R dist/Chinchilla.app /Applications/
+./scripts/dev-run.sh                        # build de depuración y abrir
+swift test
 ```
 
-El script verifica la firma como lo haría Gatekeeper (`spctl`) antes de terminar.
+Prueba siempre desde el bundle, nunca con `swift run`: los permisos TCC (Acceso total al disco, Grabación de pantalla) se asocian al bundle, no al binario suelto.
+
+### Acceso total al disco
+
+Sin él no se pueden medir ni limpiar Safari, la Papelera y otras rutas protegidas; la app lo avisa con un banner. Ajustes del Sistema → Privacidad y seguridad → Acceso total al disco → `+` → `Chinchilla.app`.
+
+Si compilas tú mismo, la firma ad-hoc cambia en cada build y macOS olvida el permiso. Para evitarlo, crea un certificado de firma de código llamado `Chinchilla Dev` en Acceso a Llaveros; el script lo detecta y lo usa.
+
+### Publicar una versión
+
+```bash
+# subir la versión en packaging/Info.plist
+NOTARY_PROFILE="tu-perfil" ./scripts/release.sh    # → DMG firmado, notarizado y con staple
+gh release create vX.Y.Z dist/Chinchilla-X.Y.Z.dmg
+```
+
+Requiere un certificado "Developer ID Application" y credenciales de notarización guardadas con `xcrun notarytool store-credentials`. El script verifica la firma como lo haría Gatekeeper antes de terminar.
 
 ### Actualizaciones
 
-Sin frameworks ni diálogos: la app consulta la API de GitHub Releases (máx. una vez al día, en silencio) y si hay versión nueva muestra una cápsula discreta en la toolbar que enlaza a la descarga. Publicar el release en GitHub (`gh release create vX.Y.Z dist/Chinchilla-X.Y.Z.dmg`) es todo lo que se necesita para que los usuarios lo vean.
+Sin frameworks ni diálogos. La app consulta la API de GitHub Releases una vez al día, en silencio, y si hay versión nueva muestra una cápsula discreta en la barra de herramientas. Nunca un popup: publicar el release es todo lo que hace falta.
 
 ## Arquitectura
 
 ```
 Sources/
-├── Chinchilla/    # SwiftUI: vistas + viewmodels (@Observable, @MainActor)
-├── CleanCore/     # motor de limpieza: reglas, scanner, cleaner, SafetyPolicy
-├── DiskScanKit/   # fts walker paralelo, treemap, tamaños asignados, artefactos
-└── SystemKit/     # shell runner, docker, métricas (mach/sysctl/IOKit), permisos
+├── Chinchilla/     # SwiftUI: vistas y viewmodels (@Observable, @MainActor)
+├── CleanCore/      # motor de limpieza: reglas, scanner, cleaner, SafetyPolicy
+├── DiskScanKit/    # recorrido fts paralelo, treemap, tamaños asignados
+├── SystemKit/      # shell runner, Docker, métricas (mach/sysctl/IOKit), permisos
+├── CastKit/        # Google Cast, DLNA, FCast, captura, RTP, servidor HTTP
+└── StreamHostKit/  # host compatible con Moonlight (emparejamiento)
 ```
 
-Localizada en inglés y español (según el idioma del sistema).
+Dos reglas que costaron caro y que conviene conocer antes de tocar el código:
+
+1. **Todo trabajo bloqueante va por `Blocking.run`**, nunca directo en un `Task`. El pool cooperativo de Swift tiene un carril por núcleo; un escaneo lanzado ahí ahoga el resto de la app.
+2. **La interfaz nunca espera a un proceso externo sin plazo.** Se renderiza con datos locales al instante, las sondas corren en paralelo con tiempos límite cortos y los resultados se rellenan después.
+
+Interfaz en español e inglés, según el idioma del sistema.
 
 ## Licencia
 
-[AGPL-3.0](LICENSE) — software libre: úsalo, modifícalo y compártelo bajo la misma licencia. Sin dependencias externas. Inspirada en [Mole](https://github.com/tw93/Mole) (GPL-3.0) sin reutilizar su código.
+[AGPL-3.0](LICENSE). Software libre: úsalo, modifícalo y compártelo bajo la misma licencia.
 
-¿Te sirve Chinchilla? [Apóyala en GitHub Sponsors ♥](https://github.com/sponsors/SebastianMoyano)
+Si te resulta útil, puedes [apoyarlo en GitHub Sponsors](https://github.com/sponsors/SebastianMoyano).
