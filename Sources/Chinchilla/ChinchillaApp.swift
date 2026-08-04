@@ -134,6 +134,10 @@ struct ChinchillaApp: App {
             MainWindow()
                 .environment(appState)
                 .frame(minWidth: 980, minHeight: 640)
+                // The palette is dark by construction — near-black surfaces
+                // with near-white text. Under a light system appearance the
+                // two fight and everything washes out, so the window commits.
+                .preferredColorScheme(.dark)
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)

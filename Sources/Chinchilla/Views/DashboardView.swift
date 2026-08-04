@@ -11,6 +11,23 @@ struct DiskUsage: Sendable {
     var purgeable: Int64 { max(0, availableImportant - available) }
     var usedFraction: Double { total > 0 ? Double(used) / Double(total) : 0 }
 
+    /// A verdict, not a number — the number is already in the ring.
+    var headline: LocalizedStringKey {
+        switch usedFraction {
+        case ..<0.8: "Plenty of room"
+        case ..<0.92: "Filling up"
+        default: "Almost full"
+        }
+    }
+
+    var subtitle: LocalizedStringKey {
+        switch usedFraction {
+        case ..<0.8: "Nothing urgent. A clean now and then keeps it that way."
+        case ..<0.92: "Worth a clean soon — macOS slows down when the disk gets tight."
+        default: "macOS needs free space to work properly. Clean now, or move something off."
+        }
+    }
+
     static func current() -> DiskUsage {
         var usage = DiskUsage()
         let url = URL(fileURLWithPath: NSHomeDirectory())
@@ -34,8 +51,9 @@ struct DashboardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: Theme.sectionGap) {
                 header
+                hero
                 SmartScanCard(usage: $usage)
                 DailyBoostCard()
                 MemoryCard()
@@ -54,6 +72,56 @@ struct DashboardView: View {
             lastClean = Cleaner.lastClean()
             appState.snapshots.refresh()
         }
+    }
+
+    /// The mockups lead with one number the size of a headline and a ring
+    /// around it. That's the whole point of a dashboard: the state of the
+    /// machine should land before you read a word.
+    private var hero: some View {
+        HStack(alignment: .center, spacing: 28) {
+            DiskRing(usage: usage, diameter: 190)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(usage.headline)
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(Theme.onSurface)
+                Text(usage.subtitle)
+                    .font(.callout)
+                    .foregroundStyle(Theme.onSurfaceVariant)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    metric("Free", usage.available, Theme.ok)
+                    metric("Used", usage.used, Theme.primary)
+                    if usage.purgeable > 0 {
+                        metric("Purgeable", usage.purgeable, Theme.caution)
+                    }
+                }
+                .padding(.top, 2)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+
+    private func metric(_ title: LocalizedStringKey, _ bytes: Int64, _ tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Theme.outline)
+                .textCase(.uppercase)
+            DataValue(
+                text: ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file),
+                size: 16, weight: .semibold
+            )
+            .foregroundStyle(tint)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: Theme.tileRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.tileRadius, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        )
     }
 
     private var header: some View {
@@ -148,7 +216,7 @@ struct DashboardView: View {
 
     private var background: some View {
         LinearGradient(
-            colors: [Color.accentColor.opacity(0.12), .clear],
+            colors: [Theme.primaryContainer.opacity(0.10), .clear],
             startPoint: .top,
             endPoint: .center
         )
@@ -160,37 +228,42 @@ struct DashboardView: View {
 /// is, percentage front and center where it actually fits.
 struct DiskRing: View {
     let usage: DiskUsage
+    var diameter: CGFloat = 130
 
     private var color: Color {
         switch usage.usedFraction {
-        case ..<0.8: .green
-        case ..<0.92: .orange
-        default: .red
+        case ..<0.8: Theme.ok
+        case ..<0.92: Theme.caution
+        default: Theme.danger
         }
     }
 
     var body: some View {
         ZStack {
             Circle()
-                .stroke(.quaternary.opacity(0.5), style: StrokeStyle(lineWidth: 11))
+                .stroke(Color.white.opacity(0.10), style: StrokeStyle(lineWidth: diameter * 0.075))
             Circle()
                 .trim(from: 0, to: max(0.02, usage.usedFraction))
                 .stroke(
                     color.gradient,
-                    style: StrokeStyle(lineWidth: 11, lineCap: .round)
+                    style: StrokeStyle(lineWidth: diameter * 0.075, lineCap: .round)
                 )
+                .shadow(color: color.opacity(0.45), radius: 12)
                 .rotationEffect(.degrees(-90))
                 .animation(.spring, value: usage.usedFraction)
             VStack(spacing: 0) {
                 Text(verbatim: "\(Int(usage.usedFraction * 100))%")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(.system(size: diameter * 0.26, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.onSurface)
                     .contentTransition(.numericText())
                 Text("full")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: max(10, diameter * 0.075), weight: .semibold))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Theme.outline)
             }
         }
-        .frame(width: 130, height: 130)
+        .frame(width: diameter, height: diameter)
         .accessibilityLabel(Text("Disk \(Int(usage.usedFraction * 100)) percent full"))
     }
 }
@@ -218,8 +291,7 @@ struct SmartScanCard: View {
                             .frame(minWidth: 110)
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.purple)
+                .buttonStyle(GlowButtonStyle())
                 .disabled(appState.smartScanRunning)
             }
             if appState.smartScanDone {
@@ -227,7 +299,7 @@ struct SmartScanCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(appState.smartTotalBytes, format: .byteCount(style: .file))
                         .font(.system(size: 30, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(Theme.primary)
                         .contentTransition(.numericText())
                     Text("reclaimable")
                         .font(.caption)

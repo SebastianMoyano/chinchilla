@@ -555,3 +555,14 @@
 "Only clean when there's at least" = "Limpiar solo si hay al menos";
 "Always clean" = "Limpiar siempre";
 "Below that, Sunday passes in silence — no clean, no notification." = "Por debajo de eso, el domingo pasa en silencio — sin limpieza ni aviso.";
+
+/* Dashboard rediseñado (0.13.0) */
+"Plenty of room" = "Espacio de sobra";
+"Filling up" = "Llenándose";
+"Almost full" = "Casi lleno";
+"Nothing urgent. A clean now and then keeps it that way." = "Nada urgente. Una limpieza de vez en cuando lo mantiene así.";
+"Worth a clean soon — macOS slows down when the disk gets tight." = "Conviene limpiar pronto — macOS se pone lento cuando el disco se aprieta.";
+"macOS needs free space to work properly. Clean now, or move something off." = "macOS necesita espacio libre para funcionar bien. Limpia ahora, o saca algo del disco.";
+"Free" = "Libre";
+"Used" = "Usado";
+"Purgeable" = "Purgable";
