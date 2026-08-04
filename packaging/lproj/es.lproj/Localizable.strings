@@ -600,3 +600,13 @@
 "Pick the side the TV actually stands on, so the pointer crosses over the right edge." = "Elige el lado donde está el TV de verdad, para que el puntero cruce por el borde correcto.";
 "Resolution is agreed with the TV when the stream starts — stop to change it." = "La resolución se acuerda con el TV al iniciar — detén para cambiarla.";
 "How sharp the picture is." = "Qué tan nítida se ve la imagen.";
+
+/* AirPlay en la lista y cast en la barra de menús (0.13.0) */
+"AirPlay" = "AirPlay";
+"Your Mac talks to this one directly — and does it better than we can" = "Tu Mac habla con este directamente — y lo hace mejor que nosotros";
+"This TV speaks AirPlay; macOS drives it natively" = "Este TV habla AirPlay; macOS lo maneja de forma nativa";
+"Open Screen Mirroring" = "Abrir Duplicar pantalla";
+"Casting" = "Transmitiendo";
+"Stop" = "Detener";
+"%@ on %@" = "%1$@ en %2$@";
+"Find a TV" = "Buscar un TV";

@@ -236,6 +236,13 @@ struct CastView: View {
                             Button("Reconnect") { model.connect(to: target) }
                                 .controlSize(.small)
                         }
+                    } else if target.handledByMacOS {
+                        Button("Open Screen Mirroring") {
+                            if let url = URL(string: AirPlayDiscovery.screenMirroringSettingsURL) {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .controlSize(.small)
                     } else if target.canMirror {
                         Button(model.castMode.title) { model.startCasting(to: target) }
                             .buttonStyle(ActionButtonStyle())

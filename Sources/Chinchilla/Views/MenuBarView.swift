@@ -97,6 +97,14 @@ struct MenuBarView: View {
 
             Divider()
 
+            // macOS doesn't let apps into Control Center — `ControlWidget` is
+            // marked unavailable there — and the menu bar is the equivalent
+            // Apple does sanction. So casting lives here too: one click from
+            // anywhere, without opening the window.
+            castSection
+
+            Divider()
+
             HStack {
                 Button {
                     openMain(.dashboard)
@@ -173,6 +181,47 @@ struct MenuBarView: View {
         case .warning: ("Warning", .orange)
         case .critical: ("Critical", .red)
         case .unknown: ("—", .secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var castSection: some View {
+        let cast = appState.cast
+        if cast.mirroring {
+            HStack {
+                Label(
+                    cast.castingName ?? String(localized: "Casting"),
+                    systemImage: "rectangle.on.rectangle.fill"
+                )
+                .font(.callout)
+                .foregroundStyle(Theme.action)
+                Spacer()
+                Button("Stop") { cast.stopMirroring() }
+                    .controlSize(.small)
+            }
+        } else if let target = cast.targets.first(where: { $0.canMirror }) {
+            // One recognised TV is the common case; more than that is a
+            // choice, and choices belong in the window.
+            HStack {
+                Button {
+                    cast.startCasting(to: target)
+                } label: {
+                    Label(
+                        "\(cast.castMode.title) on \(target.name)",
+                        systemImage: cast.castMode.symbol
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .disabled(cast.mirrorStarting)
+                if cast.mirrorStarting { ProgressView().controlSize(.small) }
+            }
+        } else {
+            Button {
+                openMain(.cast)
+            } label: {
+                Label("Find a TV", systemImage: "tv.badge.wifi")
+                    .frame(maxWidth: .infinity)
+            }
         }
     }
 

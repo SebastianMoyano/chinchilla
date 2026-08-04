@@ -15,6 +15,8 @@ struct CastTarget: Identifiable, Hashable {
         case dlna(DLNARenderer)
         /// Chromecast built-in: what most Android TVs speak out of the box.
         case googlecast(GoogleCastDevice)
+        /// Listed so the room is complete; macOS drives it, not us.
+        case airplay(AirPlayDevice)
     }
 
     let id: String
@@ -26,6 +28,7 @@ struct CastTarget: Identifiable, Hashable {
         case .fcast: "FCast"
         case .dlna: "DLNA"
         case .googlecast: "Chromecast"
+        case .airplay: "AirPlay"
         }
     }
 
@@ -43,7 +46,14 @@ struct CastTarget: Identifiable, Hashable {
         switch kind {
         case .googlecast, .fcast: true
         case .dlna: false      // DLNA moves files around; it has no live input
+        case .airplay: false   // macOS owns this route; no app can start it
         }
+    }
+
+    /// True when the right answer is "use the system", not "use us".
+    var handledByMacOS: Bool {
+        if case .airplay = kind { return true }
+        return false
     }
 
     /// Chromecast devices carry the same mirroring receiver Chrome uses, which
@@ -58,11 +68,16 @@ struct CastTarget: Identifiable, Hashable {
         case .googlecast: "Files and screen mirroring · under half a second"
         case .fcast: "Files and screen mirroring · 2–3 seconds"
         case .dlna: "Files only — this one can't mirror your screen"
+        case .airplay(let device):
+            device.isAppleDevice
+                ? "Your Mac talks to this one directly — and does it better than we can"
+                : "This TV speaks AirPlay; macOS drives it natively"
         }
     }
 
     var capabilityTint: Color {
-        canMirror ? .green : .secondary
+        if handledByMacOS { return Theme.primary }
+        return canMirror ? Theme.ok : .secondary
     }
 }
 
@@ -100,6 +115,8 @@ final class CastModel {
     private var castSession: GoogleCastSession?
     private var castEventsTask: Task<Void, Never>?
     private var dlnaRenderers: [DLNARenderer] = []
+    private var airplayDevices: [AirPlayDevice] = []
+    private let airplayDiscovery = AirPlayDiscovery()
     private var awaitingFetch = false
 
     // MARK: Screen mirroring
@@ -158,7 +175,7 @@ final class CastModel {
     var canMirrorToConnectedDevice: Bool {
         switch connected?.kind {
         case .googlecast, .fcast: true
-        case .dlna, nil: false
+        case .dlna, .airplay, nil: false
         }
     }
 
@@ -420,8 +437,8 @@ final class CastModel {
                         container: "application/vnd.apple.mpegurl",
                         url: "\(base)/stream.m3u8"
                     ))
-                case .dlna:
-                    break
+                case .dlna, .airplay:
+                    break      // not ours to drive
                 }
             } catch {
                 mirrorError = error.localizedDescription
@@ -500,6 +517,12 @@ final class CastModel {
             )
         }
         // Google Cast (Chromecast built-in): continuous Bonjour browse.
+        airplayDiscovery.start { [weak self] devices in
+            Task { @MainActor in
+                self?.airplayDevices = devices
+                self?.rebuildTargets()
+            }
+        }
         castDiscovery.start { [weak self] devices in
             Task { @MainActor in
                 self?.castDevices = devices
@@ -527,6 +550,9 @@ final class CastModel {
         }
         list += castDevices.map {
             CastTarget(id: "cast:\($0.id)", name: $0.name, kind: .googlecast($0))
+        }
+        list += airplayDevices.map {
+            CastTarget(id: "airplay:\($0.name)", name: $0.name, kind: .airplay($0))
         }
         list += dlnaRenderers.map {
             CastTarget(id: "dlna:\($0.avTransportURL.absoluteString)", name: $0.name, kind: .dlna($0))
@@ -566,6 +592,9 @@ final class CastModel {
         connected = target
         lastError = nil
         switch target.kind {
+        case .airplay:
+            // Listed for completeness; macOS owns the connection.
+            sessionState = .closed
         case .fcast(let device):
             let session = FCastSession(endpoint: device.endpoint)
             self.session = session
@@ -656,6 +685,7 @@ final class CastModel {
     /// actually reach it (VPNs and virtual adapters break naive guesses).
     private var targetHost: String? {
         switch connected?.kind {
+        case .airplay: nil
         case .dlna(let renderer): renderer.avTransportURL.host
         case .googlecast(let device): device.host
         case .fcast(let device):
@@ -723,6 +753,8 @@ final class CastModel {
                 await session?.play(FCastPlayMessage(container: mime, url: mediaURL))
             case .googlecast:
                 await castSession?.load(url: mediaURL, mime: mime, title: url.lastPathComponent)
+            case .airplay:
+                break      // macOS drives this one
             case .dlna(let renderer):
                 do {
                     try await DLNAControl.play(
@@ -772,6 +804,8 @@ final class CastModel {
                 paused ? await session?.resume() : await session?.pause()
             case .googlecast:
                 paused ? await castSession?.play() : await castSession?.pause()
+            case .airplay:
+                break      // macOS drives this one
             case .dlna(let renderer):
                 if paused {
                     try? await DLNAControl.resume(renderer)
@@ -791,6 +825,7 @@ final class CastModel {
             switch target.kind {
             case .fcast: await session?.stop()
             case .googlecast: await castSession?.stop()
+            case .airplay: break
             case .dlna(let renderer): try? await DLNAControl.stop(renderer)
             }
         }
@@ -803,6 +838,7 @@ final class CastModel {
             switch target.kind {
             case .fcast: await session?.seek(to: time)
             case .googlecast: await castSession?.seek(to: time)
+            case .airplay: break
             case .dlna(let renderer): try? await DLNAControl.seek(renderer, to: time)
             }
         }
@@ -815,6 +851,7 @@ final class CastModel {
             switch target.kind {
             case .fcast: await session?.setVolume(value)
             case .googlecast: await castSession?.setVolume(value)
+            case .airplay: break
             case .dlna(let renderer): try? await DLNAControl.setVolume(renderer, volume: value)
             }
         }
