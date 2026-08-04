@@ -117,10 +117,9 @@ struct DashboardView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: Theme.tileRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.tileRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        .background(
+            Color.white.opacity(0.05),
+            in: RoundedRectangle(cornerRadius: Theme.tileRadius, style: .continuous)
         )
     }
 
@@ -216,7 +215,7 @@ struct DashboardView: View {
 
     private var background: some View {
         LinearGradient(
-            colors: [Theme.primaryContainer.opacity(0.10), .clear],
+            colors: [Theme.primaryContainer.opacity(0.05), .clear],
             startPoint: .top,
             endPoint: .center
         )
@@ -244,11 +243,7 @@ struct DiskRing: View {
                 .stroke(Color.white.opacity(0.10), style: StrokeStyle(lineWidth: diameter * 0.075))
             Circle()
                 .trim(from: 0, to: max(0.02, usage.usedFraction))
-                .stroke(
-                    color.gradient,
-                    style: StrokeStyle(lineWidth: diameter * 0.075, lineCap: .round)
-                )
-                .shadow(color: color.opacity(0.45), radius: 12)
+                .stroke(color, style: StrokeStyle(lineWidth: diameter * 0.075, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(.spring, value: usage.usedFraction)
             VStack(spacing: 0) {
@@ -291,7 +286,7 @@ struct SmartScanCard: View {
                             .frame(minWidth: 110)
                     }
                 }
-                .buttonStyle(GlowButtonStyle())
+                .buttonStyle(ActionButtonStyle())
                 .disabled(appState.smartScanRunning)
             }
             if appState.smartScanDone {
@@ -314,19 +309,8 @@ struct SmartScanCard: View {
             }
             Spacer()
         }
-        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [.purple.opacity(0.14), .indigo.opacity(0.06)],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 16)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(.purple.opacity(0.25), lineWidth: 1)
-        )
+        .card()
     }
 
     private func smartRow(_ title: LocalizedStringKey, _ bytes: Int64, _ target: SidebarItem) -> some View {

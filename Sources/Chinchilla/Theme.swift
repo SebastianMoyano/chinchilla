@@ -13,11 +13,17 @@ import SwiftUI
 /// near-white — so the window pins itself to dark rather than washing out
 /// under a light system appearance.
 ///
-/// What is *not* copied is deliberate: SF Pro instead of Inter, SF Symbols
-/// instead of Material Symbols. Those are what macOS draws in every other
+/// What is *not* copied is deliberate. SF Pro instead of Inter, SF Symbols
+/// instead of Material Symbols: those are what macOS draws in every other
 /// window, and a bundled web font is exactly what makes a Mac app feel like a
-/// port. And the glass here is real vibrancy sampling the desktop behind the
-/// window — the mockups can only fake that with a fixed screenshot.
+/// port. The glass is real vibrancy sampling the desktop behind the window,
+/// which the mockups can only fake with a fixed screenshot.
+///
+/// And none of their glow. The mockups ring every accent in coloured light —
+/// `shadow-[0_0_20px_rgba(0,122,255,0.6)]`, pulsing halos, drop shadows on
+/// text. That's a web idiom. Apple's surfaces are flat and the depth comes
+/// from translucency: a material, a hairline, and nothing bleeding out of the
+/// edges. Sitting beside real Mac controls, a glowing button reads as a toy.
 enum Theme {
 
     private static func hex(_ value: UInt32, alpha: Double = 1) -> Color {
@@ -98,8 +104,6 @@ extension View {
                         RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
                             .strokeBorder(Theme.cardStroke, lineWidth: 1)
                     )
-                    // Lifts the card off the window instead of leaving it flat.
-                    .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
             )
     }
 }
@@ -113,11 +117,7 @@ struct IconTile: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: Theme.tileRadius, style: .continuous)
-            .fill(.black.opacity(0.22))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.tileRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-            )
+            .fill(tint.opacity(0.14))
             .overlay(
                 Image(systemName: symbol)
                     .font(.system(size: size * 0.48, weight: .medium))
@@ -138,31 +138,26 @@ struct SeverityPill: View {
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
-            .background(tint.opacity(0.18), in: Capsule())
-            .overlay(Capsule().strokeBorder(tint.opacity(0.28), lineWidth: 1))
+            .background(tint.opacity(0.16), in: Capsule())
             .foregroundStyle(tint)
     }
 }
 
-/// The mockups' primary button: system blue with a glow, and it shrinks when
-/// pressed so the click feels like it landed.
-struct GlowButtonStyle: ButtonStyle {
+/// The primary action, the way macOS draws one: a flat capsule of solid
+/// colour that darkens on press. The mockups put a coloured glow behind it —
+/// that's a web idiom, and next to real Mac controls it reads as a toy.
+/// Depth here comes from translucency, not from light bleeding out of things.
+struct ActionButtonStyle: ButtonStyle {
     var tint: Color = Theme.action
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(.white)
-            .padding(.horizontal, 22)
-            .padding(.vertical, 11)
-            .background(
-                Capsule()
-                    .fill(tint.opacity(configuration.isPressed ? 0.75 : 0.9))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
-                    .shadow(color: tint.opacity(0.45), radius: 14, y: 2)
-            )
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 9)
+            .background(Capsule().fill(tint.opacity(configuration.isPressed ? 0.7 : 1)))
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
