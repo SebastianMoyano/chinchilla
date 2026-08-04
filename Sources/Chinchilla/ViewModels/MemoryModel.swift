@@ -23,7 +23,12 @@ final class MemoryModel {
     var refreshing = false
 
     struct Tip: Identifiable {
-        let id = UUID()
+        /// Derived from the icon, which is unique across every branch that
+        /// builds one. A `UUID()` default looked harmless, but `tips` is
+        /// *computed*: every read minted fresh ids, so each render handed
+        /// ForEach a wholly different identity set and the whole subtree was
+        /// torn down and re-inserted instead of updated.
+        var id: String { icon }
         let icon: String
         let text: LocalizedStringKey
         let destination: SidebarItem?

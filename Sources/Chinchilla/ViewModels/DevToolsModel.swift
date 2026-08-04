@@ -87,27 +87,41 @@ final class DevToolsModel {
 
     /// Moves selected artifacts to Trash. Guard: the path must be a known
     /// artifact dir name with its project marker still present.
+    /// `Task {}` inside a `@MainActor` class inherits the main actor, so this
+    /// loop ran on the main thread despite looking asynchronous. Deleting a
+    /// `node_modules` is tens of thousands of files.
     func trashSelectedArtifacts() {
-        let toTrash = artifacts.filter { selectedArtifacts.contains($0.id) }
+        guard !trashingArtifacts else { return }
+        trashingArtifacts = true
+        let paths = artifacts.filter { selectedArtifacts.contains($0.id) }.map(\.path)
         Task {
-            var failures: [String] = []
-            for artifact in toTrash {
-                let name = (artifact.path as NSString).lastPathComponent
-                let isKnownKind = ArtifactKind.allCases.contains { $0.rawValue == name }
-                guard isKnownKind, artifact.path.hasPrefix(NSHomeDirectory() + "/") else {
-                    failures.append(artifact.path)
-                    continue
-                }
-                do {
-                    try FileManager.default.trashItem(
-                        at: URL(fileURLWithPath: artifact.path), resultingItemURL: nil
-                    )
-                } catch {
-                    failures.append("\(artifact.path): \(error.localizedDescription)")
-                }
-            }
+            defer { trashingArtifacts = false }
+            let failures = await Blocking.run { Self.trashArtifacts(paths) }
             artifactError = failures.isEmpty ? nil : failures.joined(separator: "\n")
             scanArtifacts()
         }
     }
+
+    var trashingArtifacts = false
+
+    private nonisolated static func trashArtifacts(_ paths: [String]) -> [String] {
+        var failures: [String] = []
+        for path in paths {
+            let name = (path as NSString).lastPathComponent
+            let isKnownKind = ArtifactKind.allCases.contains { $0.rawValue == name }
+            guard isKnownKind, path.hasPrefix(NSHomeDirectory() + "/") else {
+                failures.append(path)
+                continue
+            }
+            do {
+                try FileManager.default.trashItem(
+                    at: URL(fileURLWithPath: path), resultingItemURL: nil
+                )
+            } catch {
+                failures.append("\(path): \(error.localizedDescription)")
+            }
+        }
+        return failures
+    }
+
 }

@@ -1,4 +1,5 @@
 import Foundation
+import DiskScanKit
 
 public struct CleanFailure: Error, Sendable, Identifiable {
     public var id: String { path }
@@ -21,6 +22,18 @@ public enum Cleaner {
         dryRun: Bool,
         rules ruleList: [CleanRule] = RuleCatalog.rules
     ) async -> CleanOutcome {
+        // The whole delete run — every fileExists, every trashItem, and the
+        // audit-log write — is synchronous work with no awaits in it. Left in
+        // an async body it squatted a cooperative lane for the duration of a
+        // clean; this is the largest single unwrapped block in the codebase.
+        await Blocking.run { performClean(items: items, dryRun: dryRun, rules: ruleList) }
+    }
+
+    private static func performClean(
+        items: [CleanItem],
+        dryRun: Bool,
+        rules ruleList: [CleanRule]
+    ) -> CleanOutcome {
         let rules = Dictionary(uniqueKeysWithValues: ruleList.map { ($0.id, $0) })
         var outcome = CleanOutcome(dryRun: dryRun)
 

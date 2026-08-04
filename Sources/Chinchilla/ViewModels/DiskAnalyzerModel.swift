@@ -123,28 +123,57 @@ final class DiskAnalyzerModel {
     }
 
     /// Trash selected copies; refuses to empty an entire group.
+    ///
+    /// The deletion runs off the main thread. It used to run on it, straight
+    /// from the confirmation button: duplicates are 5 MB or larger by
+    /// definition, the scan roots include Movies and Pictures, and those are
+    /// commonly symlinked to an external drive — where `trashItem` becomes a
+    /// full copy. A few GB of duplicates meant minutes of dead window.
     func trashSelectedDuplicates() {
+        guard !trashing else { return }
+        trashing = true
+        var plan: [(group: DuplicateGroup, selected: [String])] = []
         var failures: [String] = []
-        var trashed = 0
-        var trashedPaths: Set<String> = []
         for group in duplicateGroups {
             let selected = group.paths.filter { selectedDupes.contains($0) }
             guard selected.count < group.paths.count else {
                 failures.append(String(localized: "Kept 1 copy of \(group.paths.first ?? "?") — can't delete every copy."))
                 continue
             }
-            for path in selected {
-                do {
-                    try FileManager.default.trashItem(
-                        at: URL(fileURLWithPath: path), resultingItemURL: nil
-                    )
-                    trashed += 1
-                    trashedPaths.insert(path)
-                } catch {
-                    failures.append("\((path as NSString).lastPathComponent): \(error.localizedDescription)")
-                }
+            plan.append((group, selected))
+        }
+        let paths = plan.flatMap(\.selected)
+        Task {
+            defer { trashing = false }
+            let outcome = await Blocking.run { Self.trash(paths) }
+            failures.append(contentsOf: outcome.failures)
+            finishTrashing(trashed: outcome.trashedPaths.count,
+                           trashedPaths: outcome.trashedPaths,
+                           failures: failures)
+        }
+    }
+
+    var trashing = false
+
+    private nonisolated static func trash(
+        _ paths: [String]
+    ) -> (trashedPaths: Set<String>, failures: [String]) {
+        var trashedPaths: Set<String> = []
+        var failures: [String] = []
+        for path in paths {
+            do {
+                try FileManager.default.trashItem(
+                    at: URL(fileURLWithPath: path), resultingItemURL: nil
+                )
+                trashedPaths.insert(path)
+            } catch {
+                failures.append("\((path as NSString).lastPathComponent): \(error.localizedDescription)")
             }
         }
+        return (trashedPaths, failures)
+    }
+
+    private func finishTrashing(trashed: Int, trashedPaths: Set<String>, failures: [String]) {
         // Update the list in place — no need to rescan the whole disk.
         duplicateGroups = duplicateGroups.compactMap { group in
             let remaining = group.paths.filter { !trashedPaths.contains($0) }

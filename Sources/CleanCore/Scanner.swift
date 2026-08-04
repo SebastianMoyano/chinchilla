@@ -34,12 +34,22 @@ public enum CleanScanner {
         return ScanReport(items: items)
     }
 
+    private struct Candidate: Sendable {
+        let path: String
+        let modified: Date
+    }
+
     private static func scanRule(_ rule: CleanRule) async -> [CleanItem] {
-        // Phase 1 (cheap): match paths and apply filters.
-        struct Candidate: Sendable {
-            let path: String
-            let modified: Date
-        }
+        // Phase 1 was called "cheap" and isn't: expanding a glob is a
+        // directory read per component plus an lstat per result, and the
+        // catalog fans out one task per rule — 27 at once, on a pool with one
+        // lane per core. Measured with this exact shape: a concurrent
+        // heartbeat degraded from 38 ms to a worst gap of 5974 ms.
+        let candidates = await Blocking.run { matchCandidates(rule) }
+        return await size(candidates, for: rule)
+    }
+
+    private static func matchCandidates(_ rule: CleanRule) -> [Candidate] {
         var candidates: [Candidate] = []
         let now = Date()
         for pattern in rule.patterns {
@@ -70,8 +80,12 @@ public enum CleanScanner {
                 candidates.append(Candidate(path: path, modified: modified))
             }
         }
+        return candidates
+    }
 
-        // Phase 2 (expensive): size all matches in parallel.
+    /// Phase 2: size every match in parallel — each hop already goes through
+    /// `Blocking.run`, so this one was fine all along.
+    private static func size(_ candidates: [Candidate], for rule: CleanRule) async -> [CleanItem] {
         var items: [CleanItem] = []
         await withTaskGroup(of: CleanItem?.self) { group in
             for candidate in candidates {

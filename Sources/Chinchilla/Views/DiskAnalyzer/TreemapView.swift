@@ -2,7 +2,13 @@ import SwiftUI
 import DiskScanKit
 
 struct TreemapCell: Identifiable {
-    let id = UUID()
+    /// Content-derived, and it has to be: the cells are rebuilt inside the
+    /// GeometryReader body, so a `UUID()` default changed on every render.
+    /// The hover handler writes this id into @State, and because the new
+    /// value was *guaranteed* to differ, every mouse move forced a full
+    /// squarify re-layout instead of being dropped as an equal write — and
+    /// the highlight it drives could never match, so it never drew.
+    var id: String { node?.path ?? "__remainder__" }
     /// nil for the "everything smaller" remainder cell.
     let node: FileNode?
     let rect: CGRect
@@ -95,7 +101,7 @@ enum TreemapLayout {
 
 struct TreemapView: View {
     let model: DiskAnalyzerModel
-    @State private var hovered: UUID?
+    @State private var hovered: String?
 
     private static let palette: [Color] = [
         .orange, .blue, .purple, .teal, .pink, .indigo, .mint, .red, .cyan, .yellow,

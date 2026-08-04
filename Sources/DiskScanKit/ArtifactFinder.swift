@@ -43,10 +43,16 @@ public enum ArtifactFinder {
     }
 
     public static func find(roots: [String] = defaultRoots(), maxDepth: Int = 8) async -> [ProjectArtifact] {
-        // Walk serially (directory enumeration is cheap), size in parallel.
-        var candidates: [(path: String, project: String, kind: String)] = []
-        for root in roots {
-            walk(dir: root, depth: 0, maxDepth: maxDepth, into: &candidates)
+        // "Directory enumeration is cheap" was wrong: this recurses eight
+        // levels through project folders, and on an iCloud-backed ~/Desktop a
+        // single read stalls on the network — holding a cooperative lane the
+        // whole time. Same hop the sizing phase below already uses.
+        let candidates = await Blocking.run { () -> [(path: String, project: String, kind: String)] in
+            var found: [(path: String, project: String, kind: String)] = []
+            for root in roots {
+                walk(dir: root, depth: 0, maxDepth: maxDepth, into: &found)
+            }
+            return found
         }
         var results: [ProjectArtifact] = []
         await withTaskGroup(of: ProjectArtifact?.self) { group in

@@ -99,37 +99,57 @@ final class UninstallerModel {
 
     /// Trash every file of the selected groups. SafetyPolicy re-checks each
     /// path even though the finder only ever looks inside ~/Library.
+    /// Deletion runs off the main thread. Each file costs a `SafetyPolicy`
+    /// validation — per-component symlink resolution plus an `lstat` — on top
+    /// of the `trashItem` itself, and a big leftover group is thousands of
+    /// files. On the main thread that was a frozen window for the duration.
     func trashSelectedOrphans() {
+        guard !trashingOrphans else { return }
+        trashingOrphans = true
         let groups = orphans.filter { selectedOrphans.contains($0.id) }
+        let work = groups.map { (id: $0.id, paths: $0.files.map(\.path)) }
+        Task {
+            defer { trashingOrphans = false }
+            let outcome = await Blocking.run { Self.trashGroups(work) }
+            orphans.removeAll { outcome.done.contains($0.id) }
+            selectedOrphans.subtract(outcome.done)
+            orphanResult = outcome.failures.isEmpty
+                ? String(localized: "Moved \(outcome.trashed) items to Trash.")
+                : outcome.failures.joined(separator: "\n")
+        }
+    }
+
+    var trashingOrphans = false
+
+    private nonisolated static func trashGroups(
+        _ groups: [(id: String, paths: [String])]
+    ) -> (done: Set<String>, trashed: Int, failures: [String]) {
+        var done: Set<String> = []
         var failures: [String] = []
         var trashed = 0
-        var done: Set<String> = []
         for group in groups {
             var groupFailed = false
-            for file in group.files {
+            for path in group.paths {
                 do {
-                    try SafetyPolicy.validate(
-                        path: file.path, declaredRoots: OrphanFinder.declaredRoots
+                    let target = try SafetyPolicy.validate(
+                        path: path, declaredRoots: OrphanFinder.declaredRoots
                     )
                     try FileManager.default.trashItem(
-                        at: URL(fileURLWithPath: file.path), resultingItemURL: nil
+                        at: URL(fileURLWithPath: target), resultingItemURL: nil
                     )
                     trashed += 1
                 } catch {
                     groupFailed = true
                     failures.append(
-                        "\((file.path as NSString).lastPathComponent): \(error.localizedDescription)"
+                        "\((path as NSString).lastPathComponent): \(error.localizedDescription)"
                     )
                 }
             }
             if !groupFailed { done.insert(group.id) }
         }
-        orphans.removeAll { done.contains($0.id) }
-        selectedOrphans.subtract(done)
-        orphanResult = failures.isEmpty
-            ? String(localized: "Moved \(trashed) items to Trash.")
-            : failures.joined(separator: "\n")
+        return (done, trashed, failures)
     }
+
 
     /// Everything goes to Trash — uninstalling is always recoverable.
     func uninstall() {
