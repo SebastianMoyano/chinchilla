@@ -1,5 +1,5 @@
 import Foundation
-import Synchronization
+import DiskScanKit
 
 // MARK: - Wire framing (Chrome native messaging: 32-bit LE length + JSON)
 
@@ -207,14 +207,14 @@ public enum TabGuardHost {
     public static func run() async -> Int32 {
         TabGuardMailbox.ensureDirectory()
         let stdout = FileHandle.standardOutput
-        let writeLock = Mutex<Void>(())
+        let writeLock = Locked<Void>(())
 
         let pid = ProcessInfo.processInfo.processIdentifier
         var status = TabGuardStatus()
         status.connectedAt = Date()
         status.lastMessageAt = Date()
         TabGuardMailbox.writeStatus(status, pid: pid)
-        let statusBox = Mutex(status)
+        let statusBox = Locked(status)
 
         func send(_ object: [String: Any]) {
             guard let json = try? JSONSerialization.data(withJSONObject: object) else { return }

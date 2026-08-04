@@ -81,8 +81,10 @@ public enum Cleaner {
     private static func delete(
         path: String, roots: [String], mode: DeleteMode, dryRun: Bool
     ) -> Result<Void, CleanFailure> {
+        let target: String
         do {
-            try SafetyPolicy.validate(path: path, declaredRoots: roots)
+            // Delete exactly what was checked, not the path we were handed.
+            target = try SafetyPolicy.validate(path: path, declaredRoots: roots)
         } catch let violation as PolicyViolation {
             return .failure(CleanFailure(path: path, reason: violation.description))
         } catch {
@@ -90,7 +92,7 @@ public enum Cleaner {
         }
         if dryRun { return .success(()) }
         do {
-            let url = URL(fileURLWithPath: path)
+            let url = URL(fileURLWithPath: target)
             switch mode {
             case .trash:
                 try FileManager.default.trashItem(at: url, resultingItemURL: nil)

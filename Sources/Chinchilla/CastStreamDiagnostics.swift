@@ -1,5 +1,5 @@
 import Foundation
-import Synchronization
+import DiskScanKit
 import CastKit
 
 /// `Chinchilla caststream-test <tv-ip>` — launches Chrome's own mirroring
@@ -9,7 +9,7 @@ enum CastStreamDiagnostics {
     static let logURL = URL(fileURLWithPath: NSHomeDirectory())
         .appendingPathComponent("Library/Logs/Chinchilla/caststream-test.log")
 
-    private static let transcript = Mutex("")
+    private static let transcript = Locked("")
 
     static func log(_ line: String) {
         print(line)
@@ -27,7 +27,7 @@ enum CastStreamDiagnostics {
         log("target: \(host):8009  app: \(CastStreaming.appID) (Chrome mirroring)")
 
         let session = GoogleCastSession(device: GoogleCastDevice(name: "TV", host: host))
-        let answers = Mutex<[CastStreaming.Answer]>([])
+        let answers = Locked<[CastStreaming.Answer]>([])
         await session.setOnAnyMessage { namespace, payload in
             let short = namespace.replacingOccurrences(
                 of: "urn:x-cast:com.google.cast.", with: ""

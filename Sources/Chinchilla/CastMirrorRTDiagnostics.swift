@@ -1,5 +1,5 @@
 import Foundation
-import Synchronization
+import DiskScanKit
 import CastKit
 
 /// `Chinchilla caststream-mirror <tv-ip> [seconds] [delay-ms]` — runs exactly
@@ -12,7 +12,7 @@ enum CastMirrorRTDiagnostics {
     static let logURL = URL(fileURLWithPath: NSHomeDirectory())
         .appendingPathComponent("Library/Logs/Chinchilla/caststream-mirror.log")
 
-    private static let transcript = Mutex("")
+    private static let transcript = Locked("")
 
     static func log(_ line: String) {
         print(line)

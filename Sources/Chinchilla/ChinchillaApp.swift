@@ -48,6 +48,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Essential when launched via `swift run` (no bundle); harmless when bundled.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        // macOS can restore a "no windows" state, and then the app looks like
+        // it never opened. SwiftUI's `defaultLaunchBehavior` handles this, but
+        // it's macOS 15+ and this app still supports 14 — so bring the window
+        // up ourselves once the scene exists.
+        presentMainWindow()
+    }
+
+    /// SwiftUI creates the `Window` scene's NSWindow lazily, and macOS can
+    /// restore a "no windows" state — then the app looks like it never
+    /// opened. `defaultLaunchBehavior` covers this but is macOS 15+, so we
+    /// bring the window up ourselves, retrying briefly because the scene
+    /// doesn't exist yet when the delegate is called.
+    @MainActor
+    private func presentMainWindow(attempt: Int = 0) {
+        if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        guard attempt < 40 else { return }          // ~2 s, then give up quietly
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.presentMainWindow(attempt: attempt + 1)
+        }
     }
 
     /// With "keep running in menu bar" on (default), closing the window
@@ -107,13 +129,6 @@ struct ChinchillaApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
-        // Always show the main window on launch — without this, macOS can
-        // restore a "no windows" state and the app looks like it didn't open.
-        // Exceptions: the scheduled headless run and login-item launches,
-        // which start quietly in the menu bar.
-        .defaultLaunchBehavior(
-            (AppDelegate.isScheduledRun || AppDelegate.isLoginLaunch) ? .suppressed : .presented
-        )
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
@@ -135,3 +150,4 @@ struct ChinchillaApp: App {
         .menuBarExtraStyle(.window)
     }
 }
+

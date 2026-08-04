@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 public enum ScanEvent: Sendable {
     case progress(bytes: Int64, path: String)
@@ -49,7 +48,7 @@ public enum DiskScanner {
         let entries = (try? fm.contentsOfDirectory(atPath: root)) ?? []
 
         // Shared progress accumulator across walkers, throttled to ~10 Hz.
-        let progressState = Mutex<(total: Int64, lastEmit: ContinuousClock.Instant)>(
+        let progressState = Locked<(total: Int64, lastEmit: ContinuousClock.Instant)>(
             (0, ContinuousClock.now)
         )
         var opts = options

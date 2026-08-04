@@ -2,7 +2,7 @@
 
 Limpieza y mantenimiento de macOS, en una app nativa. SwiftUI y Swift 6, sin dependencias externas, compila sin Xcode.
 
-**[Descargar la última versión](https://github.com/SebastianMoyano/chinchilla/releases/latest)** · macOS 15+ · Apple Silicon e Intel · firmada y notarizada
+**[Descargar la última versión](https://github.com/SebastianMoyano/chinchilla/releases/latest)** · macOS 14+ · Apple Silicon e Intel · firmada y notarizada
 
 ---
 
@@ -84,7 +84,7 @@ chinchilla clean --real    # limpia de verdad
 
 ## Compilar
 
-Requiere macOS 15+ y Swift 6.1+. Las Command Line Tools bastan — no hace falta Xcode.
+Requiere macOS 14+ y Swift 6.1+. Las Command Line Tools bastan — no hace falta Xcode.
 
 ```bash
 ./scripts/build-app.sh                      # → dist/Chinchilla.app

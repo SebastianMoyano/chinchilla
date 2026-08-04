@@ -98,3 +98,28 @@ private let cachesRoot = home + "/Library/Caches"
     #expect(matches.count == 2)
     #expect(matches.allSatisfy { $0.hasSuffix("/Cache") })
 }
+
+@Test func validateReturnsTheResolvedPathToDelete() throws {
+    // A symlinked parent must not let the delete land outside what was
+    // checked: the caller deletes the returned path, so it has to be the
+    // resolved one.
+    // Under Caches, not /var/folders — the latter is denied outright, which
+    // would mask what this test is checking.
+    let base = URL(fileURLWithPath: NSHomeDirectory())
+        .appendingPathComponent("Library/Caches/chinchilla-toctou-\(UUID().uuidString)")
+    let real = base.appendingPathComponent("real")
+    let link = base.appendingPathComponent("link")
+    try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: base) }
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+
+    let victim = link.appendingPathComponent("cache.db")
+    FileManager.default.createFile(atPath: victim.path, contents: Data("x".utf8))
+
+    let resolved = try SafetyPolicy.validate(
+        path: victim.path, declaredRoots: [base.path]
+    )
+    #expect(resolved != victim.path)
+    #expect(resolved.hasSuffix("/real/cache.db"))
+    #expect(!resolved.contains("/link/"))
+}

@@ -1,7 +1,7 @@
 import Foundation
+import DiskScanKit
 import Network
 import Security
-import Synchronization
 
 /// GameStream host: what Moonlight talks to. Phase 1 implements discovery
 /// (`_nvstream._tcp`), `/serverinfo` and the four-step PIN pairing over
@@ -29,8 +29,8 @@ public final class GameStreamHost: @unchecked Sendable {
         var serverChallenge = Data()
         var clientHash = Data()
     }
-    private let session = Mutex(PairSession())
-    private let pairedClients = Mutex<[String: Data]>([:])   // uniqueid -> client cert
+    private let session = Locked(PairSession())
+    private let pairedClients = Locked<[String: Data]>([:])   // uniqueid -> client cert
 
     public init() throws {
         identity = try HostIdentity.loadOrCreate()

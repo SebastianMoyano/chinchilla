@@ -1,6 +1,6 @@
 import Foundation
+import DiskScanKit
 import Security
-import Synchronization
 import Testing
 @testable import StreamHostKit
 
@@ -65,7 +65,7 @@ private struct FakeMoonlight {
 
 @Test(.timeLimit(.minutes(1))) func fullPairingHandshake() async throws {
     let host = try GameStreamHost()
-    let logLines = Mutex<[String]>([])
+    let logLines = Locked<[String]>([])
     host.onLog = { line in logLines.withLock { $0.append(line) } }
     try host.start()
     defer { host.stop() }

@@ -1,11 +1,10 @@
 import Foundation
 import Darwin
-import Synchronization
 
 /// Shared (device, inode) registry so hardlinked files are counted once
 /// even when several walkers scan sibling subtrees in parallel.
 public final class HardlinkRegistry: Sendable {
-    private let seen = Mutex<Set<String>>([])
+    private let seen = Locked<Set<String>>([])
 
     public init() {}
 

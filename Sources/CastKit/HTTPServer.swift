@@ -2,7 +2,6 @@ import Foundation
 import Network
 import UniformTypeIdentifiers
 import DiskScanKit
-import Synchronization
 
 /// Minimal HTTP/1.1 file server (GET/HEAD) with Range support — just enough
 /// to feed a TV's media player. Files are exposed by opaque tokens, never
@@ -160,7 +159,7 @@ public final class CastHTTPServer: @unchecked Sendable {
                 connection.cancel()
                 return
             }
-            let alive = Mutex(true)
+            let alive = Locked(true)
             let writer = StreamWriter(
                 send: { data in
                     guard alive.withLock({ $0 }) else { return false }

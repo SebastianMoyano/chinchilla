@@ -60,7 +60,14 @@ public enum SafetyPolicy {
 
     /// Validates that `path` is safe to delete and lies under one of the
     /// roots the triggering rule declared.
-    public static func validate(path: String, declaredRoots: [String]) throws {
+    ///
+    /// Returns the *resolved* path, and callers must delete that one rather
+    /// than what they passed in. Validating the resolved path and then
+    /// deleting the original leaves a gap: if any parent component is a
+    /// symlink — or becomes one between the two calls — the delete lands
+    /// somewhere the check never looked at.
+    @discardableResult
+    public static func validate(path: String, declaredRoots: [String]) throws -> String {
         let resolved = resolve(path)
 
         guard resolved != "/", resolved.hasPrefix("/") else {
@@ -91,6 +98,7 @@ public enum SafetyPolicy {
                 throw PolicyViolation(path: resolved, reason: "SIP-restricted or immutable")
             }
         }
+        return resolved
     }
 
     /// Resolves symlinks in every component except the last; the leaf itself

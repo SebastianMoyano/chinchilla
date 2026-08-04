@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "cleanmacseba",
     defaultLocalization: "en",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
             name: "Chinchilla",
@@ -12,13 +12,13 @@ let package = Package(
         ),
         .target(name: "CleanCore", dependencies: ["SystemKit", "DiskScanKit"]),
         .target(name: "DiskScanKit"),
-        .target(name: "SystemKit"),
+        .target(name: "SystemKit", dependencies: ["DiskScanKit"]),
         .target(name: "CastKit", dependencies: ["DiskScanKit"]),
-        .target(name: "StreamHostKit"),
+        .target(name: "StreamHostKit", dependencies: ["DiskScanKit"]),
         .testTarget(name: "CleanCoreTests", dependencies: ["CleanCore"]),
         .testTarget(name: "DiskScanKitTests", dependencies: ["DiskScanKit"]),
         .testTarget(name: "SystemKitTests", dependencies: ["SystemKit"]),
         .testTarget(name: "CastKitTests", dependencies: ["CastKit"]),
-        .testTarget(name: "StreamHostKitTests", dependencies: ["StreamHostKit"]),
+        .testTarget(name: "StreamHostKitTests", dependencies: ["StreamHostKit", "DiskScanKit"]),
     ]
 )

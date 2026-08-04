@@ -1,6 +1,6 @@
 import Foundation
+import DiskScanKit
 import Network
-import Synchronization
 
 public struct FCastDevice: Sendable, Identifiable, Hashable {
     public let name: String
@@ -129,7 +129,7 @@ public final class GoogleCastDiscovery: @unchecked Sendable {
     /// resolved path this way.
     static func resolveHost(_ endpoint: NWEndpoint) async -> String? {
         // One-shot guard shared by the state handler and the timeout.
-        let resumed = Mutex(false)
+        let resumed = Locked(false)
         return await withCheckedContinuation { continuation in
             let connection = NWConnection(to: endpoint, using: .tcp)
             @Sendable func finish(_ host: String?) {
