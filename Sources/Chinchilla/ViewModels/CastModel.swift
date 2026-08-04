@@ -5,6 +5,7 @@ import Network
 import UniformTypeIdentifiers
 import AVFoundation
 import CastKit
+import SystemKit
 
 /// One entry in the device list, regardless of protocol.
 struct CastTarget: Identifiable, Hashable {
@@ -124,6 +125,11 @@ final class CastModel {
     var mirrorUsingFallback = false
     /// Whole screen, or one window parked on the TV while you keep working.
     var mirrorSource: MirrorSource = .wholeScreen
+    /// The Mac keeps playing what it sends, because ScreenCaptureKit copies
+    /// audio rather than moving it. Duplicating means showing something to a
+    /// room, so the room's speakers should have it and the laptop shouldn't.
+    /// Extending means you're still working here, so it stays here.
+    var muteMacWhileCasting = true
     var availableWindows: [MirrorSource] = []
     var loadingWindows = false
     private var fastMirror: CastMirrorSession?
@@ -142,6 +148,78 @@ final class CastModel {
     /// Chromecast devices have the fast receiver; FCast doesn't.
     var supportsFastMirror: Bool {
         if case .googlecast = connected?.kind { true } else { false }
+    }
+
+    /// What the user picks first, because it decides which TVs can even do
+    /// the job — a DLNA set plays files and can't take a live screen.
+    enum CastMode: String, CaseIterable, Identifiable {
+        case duplicate, extendDisplay, window
+        var id: String { rawValue }
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .duplicate: "Duplicate"
+            case .extendDisplay: "Extend"
+            case .window: "Send a window"
+            }
+        }
+
+        var detail: LocalizedStringKey {
+            switch self {
+            case .duplicate: "The TV shows the same as your Mac."
+            case .extendDisplay: "The TV becomes a second desktop you can drag windows onto."
+            case .window: "One window goes to the TV; the Mac stays yours."
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .duplicate: "rectangle.on.rectangle"
+            case .extendDisplay: "rectangle.on.rectangle.angled"
+            case .window: "macwindow.on.rectangle"
+            }
+        }
+
+        /// Sound belongs where the picture is being watched — except when
+        /// you're still the one watching.
+        var sendsAudioByDefault: Bool { self != .extendDisplay }
+    }
+
+    var castMode: CastMode = .duplicate {
+        didSet {
+            mirrorAudio = castMode.sendsAudioByDefault
+            muteMacWhileCasting = castMode == .duplicate
+            switch castMode {
+            case .duplicate: mirrorSource = .wholeScreen
+            case .extendDisplay: mirrorSource = .extendedDisplay
+            case .window:
+                refreshWindows()
+                if case .window = mirrorSource {} else {
+                    mirrorSource = availableWindows.first ?? .wholeScreen
+                }
+            }
+        }
+    }
+
+    /// Connect and start in one press. Splitting them was a technical detail
+    /// of how the session works, not a decision the user ever wanted to make.
+    func startCasting(to target: CastTarget) {
+        if connected != target {
+            connect(to: target)
+        }
+        Task {
+            // Give the session a moment to come up before offering it a stream.
+            var waited = 0
+            while sessionState != .ready, waited < 60 {
+                try? await Task.sleep(for: .milliseconds(100))
+                waited += 1
+            }
+            guard sessionState == .ready else {
+                mirrorError = String(localized: "Couldn't reach that TV.")
+                return
+            }
+            startMirroring()
+        }
     }
 
     /// Windows are listed on demand: the list is stale the moment it's built,
@@ -226,6 +304,7 @@ final class CastModel {
                     castingName = String(localized: "Your screen")
                     mirroring = true
                     playbackState = 1
+                    applyMuteIfWanted()
                     return
                 } catch {
                     guard mirrorGeneration == generation else { return }
@@ -309,6 +388,7 @@ final class CastModel {
                 let base = "http://\(ip):\(server.port)/mirror"
                 castingName = String(localized: "Your screen")
                 mirroring = true
+                applyMuteIfWanted()
                 playbackState = 1
                 switch target.kind {
                 case .googlecast:
@@ -331,7 +411,20 @@ final class CastModel {
         }
     }
 
+    /// Only mute when we're actually sending sound — muting a silent stream
+    /// would just leave the user wondering where the audio went.
+    private func applyMuteIfWanted() {
+        guard muteMacWhileCasting, mirrorAudio else { return }
+        macWasMuted = OutputMute.mute()
+    }
+
+    private var macWasMuted = false
+
     func stopMirroring() {
+        if macWasMuted {
+            OutputMute.unmute()
+            macWasMuted = false
+        }
         guard mirroring || mirrorStarting else { return }
         mirrorGeneration += 1
         mirroring = false

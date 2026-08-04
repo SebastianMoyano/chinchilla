@@ -580,3 +580,17 @@
 "Docker and project artifacts aren't in that button; they have their own screens." = "Docker y los artefactos de proyectos no entran en ese botón; tienen su propia pantalla.";
 "Nothing left to remove here." = "Ya no queda nada que quitar aquí.";
 "%lld items wouldn't go — macOS refused them." = "%lld elementos no se pudieron quitar — macOS los rechazó.";
+
+/* Cast: elegir qué antes que dónde (0.13.0) */
+"What do you want to send?" = "¿Qué quieres enviar?";
+"Duplicate" = "Duplicar";
+"Extend" = "Extender";
+"Send a window" = "Enviar una ventana";
+"The TV shows the same as your Mac." = "El TV muestra lo mismo que tu Mac.";
+"The TV becomes a second desktop you can drag windows onto." = "El TV se vuelve un segundo escritorio al que puedes arrastrar ventanas.";
+"One window goes to the TV; the Mac stays yours." = "Una ventana va al TV; el Mac sigue siendo tuyo.";
+"Send the sound too" = "Enviar también el sonido";
+"Mute this Mac while it plays there" = "Silenciar este Mac mientras suena allá";
+"macOS copies sound rather than moving it, so without this you hear everything twice. The Mac gets its sound back when you stop." = "macOS copia el sonido en vez de moverlo, así que sin esto lo escuchas todo dos veces. El Mac recupera su sonido al detener.";
+"Couldn't reach that TV." = "No se pudo conectar con ese TV.";
+"Window" = "Ventana";

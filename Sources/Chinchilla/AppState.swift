@@ -87,6 +87,8 @@ final class AppState {
         dailyBoost.startIfEnabled()
         // Never leave apps frozen by a crashed gaming session.
         gaming.resumeOrphanedPauses()
+        // Same idea for sound: a crash mid-cast must not leave a silent Mac.
+        OutputMute.restoreIfInterrupted()
         stalls.context = { [weak self] in self?.stallContext ?? "unknown" }
         stalls.start()
     }

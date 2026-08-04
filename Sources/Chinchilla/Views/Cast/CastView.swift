@@ -13,6 +13,7 @@ struct CastView: View {
                 if model.discoveryState == .waitingForLocalNetworkPermission {
                     localNetworkBanner
                 }
+                modeCard(model)
                 devicesCard(model)
                 if model.connected != nil {
                     MirrorCard()
@@ -46,6 +47,96 @@ struct CastView: View {
         }
         .padding(10)
         .background(.yellow.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// The first question, because the answer decides which TVs can even do
+    /// the job. Asking "which TV" first means offering sets that then refuse.
+    private func modeCard(_ model: CastModel) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What do you want to send?")
+                .font(.headline)
+            HStack(spacing: 10) {
+                ForEach(CastModel.CastMode.allCases) { mode in
+                    let selected = model.castMode == mode
+                    Button {
+                        model.castMode = mode
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            IconTile(
+                                symbol: mode.symbol,
+                                tint: selected ? Theme.action : Theme.outline,
+                                size: 34
+                            )
+                            Text(mode.title)
+                                .font(.callout.weight(.semibold))
+                                .foregroundStyle(selected ? Theme.onSurface : Theme.onSurfaceVariant)
+                            Text(mode.detail)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: Theme.tileRadius, style: .continuous)
+                                .fill(selected ? Theme.action.opacity(0.12) : Theme.cardFill)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.tileRadius, style: .continuous)
+                                .strokeBorder(
+                                    selected ? Theme.action.opacity(0.5) : Color.clear,
+                                    lineWidth: 1.5
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if model.castMode == .window {
+                HStack(spacing: 10) {
+                    Picker("Window", selection: Binding(
+                        get: { model.mirrorSource },
+                        set: { model.mirrorSource = $0 }
+                    )) {
+                        ForEach(model.availableWindows, id: \.self) { window in
+                            Text(verbatim: window.label).tag(window)
+                        }
+                    }
+                    .frame(maxWidth: 340)
+                    Button { model.refreshWindows() } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .controlSize(.small)
+                    Spacer()
+                }
+            }
+
+            // Sound follows the picture, except when you're still the one
+            // watching — which is exactly what extending means.
+            Toggle(isOn: Binding(
+                get: { model.mirrorAudio },
+                set: { model.mirrorAudio = $0 }
+            )) {
+                Text("Send the sound too")
+            }
+            .toggleStyle(.checkbox)
+            if model.mirrorAudio {
+                Toggle(isOn: Binding(
+                    get: { model.muteMacWhileCasting },
+                    set: { model.muteMacWhileCasting = $0 }
+                )) {
+                    Text("Mute this Mac while it plays there")
+                }
+                .toggleStyle(.checkbox)
+                Text("macOS copies sound rather than moving it, so without this you hear everything twice. The Mac gets its sound back when you stop.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
     }
 
     private func devicesCard(_ model: CastModel) -> some View {
@@ -123,6 +214,10 @@ struct CastView: View {
                             Button("Reconnect") { model.connect(to: target) }
                                 .controlSize(.small)
                         }
+                    } else if target.canMirror {
+                        Button(model.castMode.title) { model.startCasting(to: target) }
+                            .buttonStyle(ActionButtonStyle())
+                            .disabled(model.mirrorStarting)
                     } else {
                         Button("Connect") { model.connect(to: target) }
                             .controlSize(.small)
