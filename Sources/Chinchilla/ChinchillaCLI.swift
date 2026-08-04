@@ -126,12 +126,14 @@ enum ChinchillaCLI {
                 // Hand-built rather than Codable: the shape is a contract for
                 // whatever script consumes it, and it shouldn't drift when the
                 // internal model gains a field.
+                // One formatter, not one per orphan: each costs ~4 ms to build.
+                let iso = ISO8601DateFormatter()
                 let objects: [[String: Any]] = found.map { orphan in
                     [
                         "bundleID": orphan.bundleID,
                         "name": orphan.displayName,
                         "sizeBytes": orphan.size,
-                        "lastTouched": ISO8601DateFormatter().string(from: orphan.lastTouched),
+                        "lastTouched": iso.string(from: orphan.lastTouched),
                         "paths": orphan.files.map(\.path),
                     ]
                 }

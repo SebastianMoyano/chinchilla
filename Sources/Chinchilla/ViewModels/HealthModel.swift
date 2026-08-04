@@ -24,7 +24,9 @@ final class HealthModel {
     var fixResult: String?
 
     // Snappy UI
-    var snappyOn = SnappyUI.isApplied
+    /// Read by `refresh()` when the screen opens, not at launch — reading the
+    /// Dock's preferences costs a few ms of every start for nothing.
+    var snappyOn = false
     var snappyBusy = false
 
     // Brew services

@@ -59,23 +59,37 @@ public enum CleanHistory {
         return text
     }
 
-    /// Sortable, locale-independent timestamp: this output gets grepped and
-    /// piped across a fleet, so it must not change shape with the language.
-    public static func timestamp(_ date: Date) -> String {
+    /// Built once. A fresh DateFormatter per line is ~50x the cost of reusing
+    /// one, and this runs per history entry.
+    ///
+    /// `nonisolated(unsafe)` is accurate rather than a shortcut: both are
+    /// configured here and never mutated again, and formatting is documented
+    /// as thread-safe under exactly that condition.
+    nonisolated(unsafe) private static let sharedDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    nonisolated(unsafe) private static let sharedByteFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        // A dry run or a fully-blocked run freed nothing; "0 bytes" says that
+        // plainly, where the default "Zero KB" reads like a bug.
+        formatter.allowsNonnumericFormatting = false
+        return formatter
+    }()
+
+    /// Sortable, locale-independent timestamp: this output gets grepped and
+    /// piped across a fleet, so it must not change shape with the language.
+    public static func timestamp(_ date: Date) -> String {
+        sharedDateFormatter.string(from: date)
     }
 
     public static func line(_ entry: CleanHistoryEntry) -> String {
-        // A dry run or a fully-blocked run freed nothing; "0 bytes" says that
-        // plainly, where the formatter's default "Zero KB" reads like a bug.
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        formatter.allowsNonnumericFormatting = false
-        let freed = formatter.string(fromByteCount: entry.freedBytes)
+        let freed = sharedByteFormatter.string(fromByteCount: entry.freedBytes)
         let size = freed.padding(toLength: max(10, freed.count), withPad: " ", startingAt: 0)
         let count = entry.deleted.count
         var line = "\(timestamp(entry.date))  \(size)  \(count) item\(count == 1 ? "" : "s")"

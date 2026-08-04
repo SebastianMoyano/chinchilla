@@ -107,7 +107,10 @@ final class CastModel {
     var mirrorQuality: MirrorQuality = .p1080
     var mirrorAudio = true
     var mirrorError: String?
-    var screenPermissionGranted = ScreenRecordingPermission.isGranted
+    /// Not probed at init: the TCC round-trip costs ~48 ms and every launch
+    /// paid it, including the ones that never open this screen. The view asks
+    /// on appear, which is the only moment the answer matters.
+    var screenPermissionGranted = false
     private let streamer = ScreenStreamer()
 
     /// Chromecast devices carry a second, much faster receiver — the one

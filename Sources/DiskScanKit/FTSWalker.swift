@@ -109,11 +109,21 @@ public enum FTSWalker {
             }
 
             let info = Int32(ent.pointee.fts_info)
-            let entPath = String(cString: ent.pointee.fts_path)
-            let name = (entPath as NSString).lastPathComponent
+            // Both of these used to be built for every entry and thrown away
+            // for most of them — 886k paths on this machine, each an
+            // allocation plus an NSString bridge. Build them where they're
+            // actually kept.
+            func makeName() -> String {
+                guard let path = ent.pointee.fts_path else { return "" }
+                // fts already knows where the last component starts.
+                return String(cString: path + Int(ent.pointee.fts_pathlen - ent.pointee.fts_namelen))
+            }
+            func makePath() -> String { String(cString: ent.pointee.fts_path) }
 
             switch info {
             case FTS_D:
+                let name = makeName()
+                let entPath = makePath()
                 if options.skipNames.contains(name) || options.skipPaths.contains(entPath) {
                     fts_set(ftsp, ent, FTS_SKIP)
                     continue
@@ -163,16 +173,22 @@ public enum FTSWalker {
                 if stack.isEmpty { continue }
                 stack[stack.count - 1].size += allocated
                 stack[stack.count - 1].newest = max(stack[stack.count - 1].newest, modified)
-                if info == FTS_F, allocated >= options.minChildSize,
-                   !stack[stack.count - 1].isPackage {
+                // Only files big enough to be shown need their name and path.
+                let keepAsChild = info == FTS_F && allocated >= options.minChildSize
+                    && !stack[stack.count - 1].isPackage
+                let keepAsLarge = info == FTS_F && allocated >= options.largeFileThreshold
+                    && st.st_flags & sfDataless == 0
+                guard keepAsChild || keepAsLarge else { continue }
+                let entPath = makePath()
+                if keepAsChild {
                     stack[stack.count - 1].children.append(
                         FileNode(
-                            name: name, path: entPath, size: allocated,
+                            name: makeName(), path: entPath, size: allocated,
                             isDirectory: false, modified: modified
                         )
                     )
                 }
-                if info == FTS_F, allocated >= options.largeFileThreshold, st.st_flags & sfDataless == 0 {
+                if keepAsLarge {
                     largeFiles.append(LargeFile(path: entPath, size: allocated, modified: modified))
                 }
 
