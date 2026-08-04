@@ -89,12 +89,17 @@ final class AppState {
         gaming.resumeOrphanedPauses()
         // Same idea for sound: a crash mid-cast must not leave a silent Mac.
         OutputMute.restoreIfInterrupted()
-        stalls.context = { [weak self] in self?.stallContext ?? "unknown" }
         stalls.start()
     }
 
     /// What the app was doing, for the stall log. Anything that puts a
     /// spinner or live view on screen belongs here.
+    /// Pushed to the watchdog on every screen change, because it can't come
+    /// and ask once the main thread is wedged.
+    func refreshStallContext() {
+        stalls.lastKnownContext.withLock { $0 = stallContext }
+    }
+
     private var stallContext: String {
         var parts = ["screen=\(selection)"]
         if health.loading { parts.append("health.loading") }

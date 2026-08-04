@@ -123,3 +123,26 @@ private let cachesRoot = home + "/Library/Caches"
     #expect(resolved.hasSuffix("/real/cache.db"))
     #expect(!resolved.contains("/link/"))
 }
+
+/// Two rules can legitimately find the same folder — a glob over
+/// ~/Library/Caches and a rule naming one directory inside it. Emitting both
+/// counts the bytes twice, deletes the path twice, and hands SwiftUI two rows
+/// under one identity, which spins its view graph until the app stops
+/// responding. That last one is how this was found.
+@Test func scanNeverReturnsTwoItemsForTheSamePath() async {
+    let report = await CleanScanner.scan(hasFullDiskAccess: false)
+    let paths = report.items.map(\.path)
+    #expect(Set(paths).count == paths.count)
+}
+
+@Test func rulePatternsDontTargetIdenticalPaths() {
+    // The catalog's own overlap, independent of what's on this machine.
+    var expanded: [String: [String]] = [:]
+    for rule in RuleCatalog.rules {
+        for pattern in rule.patterns where !pattern.contains("*") {
+            expanded[pattern, default: []].append(rule.id)
+        }
+    }
+    let clashes = expanded.filter { $0.value.count > 1 }
+    #expect(clashes.isEmpty, "rules name the same exact path: \(clashes)")
+}

@@ -23,6 +23,14 @@ public enum CleanScanner {
         // never offers something it will then refuse.
         items.removeAll { UserExclusions.isExcluded($0.path) }
         items.sort { $0.size > $1.size }
+        // Rules overlap — a glob over ~/Library/Caches and a rule naming one
+        // folder inside it both find that folder. Two items with the same path
+        // means the same bytes counted twice, the same file deleted twice, and
+        // a SwiftUI list holding two rows under one identity, which sends its
+        // view graph into a spin that pins a core and stops responding.
+        // Sorted by size first, so the survivor is the one that measured most.
+        var seen = Set<String>()
+        items.removeAll { !seen.insert($0.path).inserted }
         return ScanReport(items: items)
     }
 

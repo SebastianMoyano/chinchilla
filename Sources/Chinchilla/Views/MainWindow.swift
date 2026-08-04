@@ -55,7 +55,9 @@ struct MainWindow: View {
         .onAppear {
             appState.desktopWidget.restoreIfEnabled()
             appState.updates.checkIfStale()
+            appState.refreshStallContext()
         }
+        .onChange(of: appState.selection) { _, _ in appState.refreshStallContext() }
     }
 
     @ViewBuilder
