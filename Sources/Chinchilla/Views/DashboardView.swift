@@ -417,35 +417,63 @@ struct AutoCleanCard: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        let schedule = appState.schedule
-        HStack(spacing: 12) {
-            Image(systemName: "calendar.badge.clock")
-                .font(.title2)
-                .foregroundStyle(.teal)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Weekly auto-clean")
-                    .font(.callout.weight(.semibold))
-                Text("Sundays at 12:00 — safe categories only, result in Notification Center and the clean log.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        @Bindable var schedule = appState.schedule
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.title2)
+                    .foregroundStyle(.teal)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Weekly auto-clean")
+                        .font(.callout.weight(.semibold))
+                    Text("Sundays at 12:00 — safe categories only, result in Notification Center and the clean log.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let error = schedule.errorMessage {
+                    Text(verbatim: error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                if schedule.needsApproval {
+                    Button("Approve in Settings") { schedule.openLoginItemsSettings() }
+                        .controlSize(.small)
+                }
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { schedule.isEnabled },
+                    set: { schedule.toggle($0) }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .tint(.teal)
             }
-            if let error = schedule.errorMessage {
-                Text(verbatim: error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-            if schedule.needsApproval {
-                Button("Approve in Settings") { schedule.openLoginItemsSettings() }
+            if schedule.isEnabled {
+                Divider()
+                HStack(spacing: 8) {
+                    Picker(selection: $schedule.minimumFreedMB) {
+                        ForEach(ScheduleModel.minimumFreedChoicesMB, id: \.self) { mb in
+                            if mb == 0 {
+                                Text("Always clean").tag(mb)
+                            } else {
+                                Text(verbatim: ByteCountFormatter.string(
+                                    fromByteCount: Int64(mb) * 1_000_000, countStyle: .file
+                                )).tag(mb)
+                            }
+                        }
+                    } label: {
+                        Text("Only clean when there's at least")
+                            .font(.caption)
+                    }
+                    .pickerStyle(.menu)
                     .controlSize(.small)
+                    .fixedSize()
+                    Text("Below that, Sunday passes in silence — no clean, no notification.")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                }
             }
-            Spacer()
-            Toggle("", isOn: Binding(
-                get: { schedule.isEnabled },
-                set: { schedule.toggle($0) }
-            ))
-            .toggleStyle(.switch)
-            .labelsHidden()
-            .tint(.teal)
         }
         .padding(16)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))

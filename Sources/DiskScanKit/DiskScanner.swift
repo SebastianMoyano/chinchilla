@@ -81,7 +81,10 @@ public enum DiskScanner {
                 rootSize += allocated
                 if allocated >= walkerOptions.minChildSize {
                     rootChildren.append(
-                        FileNode(name: entry, path: path, size: allocated, isDirectory: false)
+                        FileNode(
+                            name: entry, path: path, size: allocated, isDirectory: false,
+                            modified: Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec))
+                        )
                     )
                 }
             }
@@ -116,6 +119,7 @@ public enum DiskScanner {
             path: root,
             size: rootSize,
             isDirectory: true,
+            modified: rootChildren.map(\.modified).max() ?? .distantPast,
             children: rootChildren
         )
         return .success((rootNode, allLarge))

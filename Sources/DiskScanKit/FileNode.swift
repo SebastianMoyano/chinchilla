@@ -12,6 +12,9 @@ public struct FileNode: Sendable, Identifiable, Hashable {
     public let isDirectory: Bool
     /// True for bundles shown as leaves (.app, .photoslibrary, …).
     public let isPackage: Bool
+    /// Newest mtime anywhere inside (the folder's own mtime for empty ones).
+    /// "12 GB" is a fact; "12 GB, untouched since March" is a decision.
+    public let modified: Date
     public var children: [FileNode]
 
     public init(
@@ -20,6 +23,7 @@ public struct FileNode: Sendable, Identifiable, Hashable {
         size: Int64,
         isDirectory: Bool,
         isPackage: Bool = false,
+        modified: Date = .distantPast,
         children: [FileNode] = []
     ) {
         self.name = name
@@ -27,6 +31,7 @@ public struct FileNode: Sendable, Identifiable, Hashable {
         self.size = size
         self.isDirectory = isDirectory
         self.isPackage = isPackage
+        self.modified = modified
         self.children = children
     }
 

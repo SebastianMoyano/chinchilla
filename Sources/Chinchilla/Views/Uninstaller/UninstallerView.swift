@@ -5,22 +5,37 @@ import CleanCore
 struct UninstallerView: View {
     @Environment(AppState.self) private var appState
 
-    var body: some View {
-        @Bindable var model = appState.uninstaller
-        Group {
-            if model.apps.isEmpty && model.scanning {
-                ProgressView("Reading Applications…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List {
-                    ForEach(model.filteredApps) { app in
-                        AppRow(model: model, app: app)
-                    }
-                }
-                .listStyle(.inset)
+    private enum Tab: String, CaseIterable, Identifiable {
+        case installed, leftovers
+        var id: String { rawValue }
+        var title: LocalizedStringKey {
+            switch self {
+            case .installed: "Installed Apps"
+            case .leftovers: "Leftovers"
             }
         }
-        .searchable(text: $model.searchText, prompt: "Search apps")
+    }
+
+    @State private var tab: Tab = .installed
+
+    var body: some View {
+        @Bindable var model = appState.uninstaller
+        VStack(spacing: 0) {
+            Picker("", selection: $tab) {
+                ForEach(Tab.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+            .padding(.vertical, 8)
+            Divider()
+
+            switch tab {
+            case .installed:
+                installedList(model)
+            case .leftovers:
+                OrphansView(model: model)
+            }
+        }
         .navigationTitle("Uninstaller")
         .toolbar {
             Button {
@@ -35,6 +50,23 @@ struct UninstallerView: View {
         }
         .sheet(item: $model.inspecting) { app in
             LeftoversSheet(model: model, app: app)
+        }
+    }
+
+    @ViewBuilder
+    private func installedList(_ model: UninstallerModel) -> some View {
+        @Bindable var model = model
+        if model.apps.isEmpty && model.scanning {
+            ProgressView("Reading Applications…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List {
+                ForEach(model.filteredApps) { app in
+                    AppRow(model: model, app: app)
+                }
+            }
+            .listStyle(.inset)
+            .searchable(text: $model.searchText, prompt: "Search apps")
         }
     }
 }

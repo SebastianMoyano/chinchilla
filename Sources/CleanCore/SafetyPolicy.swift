@@ -77,6 +77,11 @@ public enum SafetyPolicy {
         if resolved.split(separator: "/").count < 3 {
             throw PolicyViolation(path: resolved, reason: "path too shallow")
         }
+        // The user's own list wins over everything else, and is checked first so
+        // the violation says so in their words rather than blaming a system rule.
+        if let excluded = UserExclusions.match(resolvedPath: resolved) {
+            throw PolicyViolation(path: resolved, reason: "excluded by you (\(excluded.path))")
+        }
         // Normalize both sides identically: resolvingSymlinksInPath strips
         // "/private" (so "/private/var/db" and "/var/db" compare equal).
         if !resolvedAllowPrefixes.contains(where: { resolved.isUnder($0) }) {
@@ -107,13 +112,27 @@ public enum SafetyPolicy {
         let ns = path as NSString
         let parent = ns.deletingLastPathComponent
         let resolvedParent = (parent as NSString).resolvingSymlinksInPath
-        return (resolvedParent as NSString).appendingPathComponent(ns.lastPathComponent)
+        var result = (resolvedParent as NSString).appendingPathComponent(ns.lastPathComponent)
+        // NSString hands back a bridged String; reading its bytes then costs a
+        // per-character trip through Foundation, and every prefix check below
+        // reads them. Pay the conversion once instead of ~40 times per path.
+        result.makeContiguousUTF8()
+        return result
     }
 }
 
 extension String {
     /// True if self == prefix or self is inside the directory `prefix`.
+    ///
+    /// Compares UTF-8 bytes and never builds the "prefix + /" string: this runs
+    /// once per deny prefix per validated path — millions of times in a big
+    /// clean — and the obvious spelling spent all its time in `String` malloc.
     func isUnder(_ prefix: String) -> Bool {
-        self == prefix || hasPrefix(prefix.hasSuffix("/") ? prefix : prefix + "/")
+        let mine = utf8, theirs = prefix.utf8
+        let n = theirs.count
+        guard mine.count >= n, mine.starts(with: theirs) else { return false }
+        if mine.count == n { return true }
+        // A real boundary, so "/a/Data" doesn't claim to contain "/a/DataBackup".
+        return theirs.last == 0x2F || mine[mine.index(mine.startIndex, offsetBy: n)] == 0x2F
     }
 }

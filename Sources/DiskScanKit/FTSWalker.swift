@@ -69,6 +69,8 @@ public enum FTSWalker {
             var size: Int64 = 0
             var children: [FileNode] = []
             var isPackage: Bool
+            /// Newest mtime seen inside, seeded with the directory's own.
+            var newest: Date
         }
         var stack: [Frame] = []
         var rootNode: FileNode?
@@ -93,7 +95,8 @@ public enum FTSWalker {
             }
             return FileNode(
                 name: frame.name, path: frame.path, size: frame.size,
-                isDirectory: true, isPackage: frame.isPackage, children: children
+                isDirectory: true, isPackage: frame.isPackage,
+                modified: frame.newest, children: children
             )
         }
 
@@ -122,7 +125,12 @@ public enum FTSWalker {
                 }
                 let ext = (name as NSString).pathExtension.lowercased()
                 let isPackage = !ext.isEmpty && options.packageExtensions.contains(ext)
-                stack.append(Frame(name: name, path: entPath, isPackage: isPackage))
+                let ownMtime = ent.pointee.fts_statp.map {
+                    Date(timeIntervalSince1970: TimeInterval($0.pointee.st_mtimespec.tv_sec))
+                } ?? .distantPast
+                stack.append(
+                    Frame(name: name, path: entPath, isPackage: isPackage, newest: ownMtime)
+                )
 
             case FTS_DP:
                 guard let frame = stack.popLast() else { continue }
@@ -131,6 +139,7 @@ public enum FTSWalker {
                     rootNode = node
                 } else {
                     stack[stack.count - 1].size += node.size
+                    stack[stack.count - 1].newest = max(stack[stack.count - 1].newest, node.modified)
                     if node.size >= options.minChildSize {
                         stack[stack.count - 1].children.append(node)
                     }
@@ -149,16 +158,21 @@ public enum FTSWalker {
                 }
                 let allocated = Int64(st.st_blocks) * 512
                 totalBytes += allocated
+                // Same stat fts already did — age costs nothing extra here.
+                let modified = Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec))
                 if stack.isEmpty { continue }
                 stack[stack.count - 1].size += allocated
+                stack[stack.count - 1].newest = max(stack[stack.count - 1].newest, modified)
                 if info == FTS_F, allocated >= options.minChildSize,
                    !stack[stack.count - 1].isPackage {
                     stack[stack.count - 1].children.append(
-                        FileNode(name: name, path: entPath, size: allocated, isDirectory: false)
+                        FileNode(
+                            name: name, path: entPath, size: allocated,
+                            isDirectory: false, modified: modified
+                        )
                     )
                 }
                 if info == FTS_F, allocated >= options.largeFileThreshold, st.st_flags & sfDataless == 0 {
-                    let modified = Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec))
                     largeFiles.append(LargeFile(path: entPath, size: allocated, modified: modified))
                 }
 
@@ -175,6 +189,7 @@ public enum FTSWalker {
                 rootNode = node
             } else {
                 stack[stack.count - 1].size += node.size
+                stack[stack.count - 1].newest = max(stack[stack.count - 1].newest, node.modified)
                 stack[stack.count - 1].children.append(node)
             }
         }

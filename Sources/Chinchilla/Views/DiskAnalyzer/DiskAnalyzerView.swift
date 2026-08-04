@@ -367,9 +367,12 @@ struct FileNodeRow: View {
                     .frame(height: 4)
                 }
                 Spacer()
-                Text(node.size, format: .byteCount(style: .file))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(node.size, format: .byteCount(style: .file))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    AgeCaption(date: node.modified)
+                }
                 if canDescend {
                     Image(systemName: "chevron.right")
                         .font(.caption)
@@ -390,6 +393,24 @@ struct FileNodeRow: View {
     private var icon: String {
         if node.isPackage { return "shippingbox" }
         return node.isDirectory ? "folder.fill" : "doc"
+    }
+}
+
+/// "12 GB" is a fact; "12 GB, untouched for 8 months" is a decision. Turns
+/// orange past six months, which is where deleting usually starts to be safe.
+struct AgeCaption: View {
+    let date: Date
+
+    private static let stale: TimeInterval = 180 * 86_400
+
+    var body: some View {
+        // .distantPast means the walker never saw an mtime (empty folder).
+        if date.timeIntervalSince1970 > 0 {
+            let isStale = Date().timeIntervalSince(date) > Self.stale
+            Text("Untouched \(Text(date, format: .relative(presentation: .named)))")
+                .font(.caption2)
+                .foregroundStyle(isStale ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
+        }
     }
 }
 
@@ -420,9 +441,7 @@ struct LargeFilesView: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(file.size, format: .byteCount(style: .file))
                             .monospacedDigit()
-                        Text(file.modified, format: .relative(presentation: .named))
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+                        AgeCaption(date: file.modified)
                     }
                 }
                 .contextMenu {

@@ -502,3 +502,56 @@
 "Only that window goes to the TV — you can keep using the Mac for anything else." = "Solo esa ventana va al TV — puedes seguir usando el Mac para cualquier otra cosa.";
 "macOS wouldn't create the extra display." = "macOS no pudo crear la pantalla adicional.";
 "The extra display came up but couldn't be captured." = "La pantalla adicional se creó pero no se pudo capturar.";
+
+/* Fase 1 — flota */
+"No cleans recorded yet." = "Todavía no hay limpiezas registradas.";
+"Free disk" = "Disco libre";
+"Memory" = "Memoria";
+"Uptime" = "Encendido";
+"Battery" = "Batería";
+"Zombies" = "Zombis";
+"MDM" = "MDM";
+"SMART" = "SMART";
+"yes" = "sí";
+"no" = "no";
+"%lld cycles" = "%lld ciclos";
+
+/* Fase 2 — más basura */
+"Installed Apps" = "Apps instaladas";
+"Leftovers" = "Restos";
+"Leftovers from apps you deleted" = "Restos de apps que borraste";
+"1. Chinchilla lists every app you have installed." = "1. Chinchilla lista todas las apps que tienes instaladas.";
+"2. It looks at the folders apps leave in your Library — settings, saved data, caches." = "2. Mira las carpetas que las apps dejan en tu Biblioteca — ajustes, datos guardados, cachés.";
+"3. Anything that belongs to an app you no longer have shows up here." = "3. Lo que pertenece a una app que ya no tienes aparece aquí.";
+"4. You pick what goes. Everything moves to the Trash, so you can put it back." = "4. Tú eliges qué se va. Todo pasa a la Papelera, así que puedes devolverlo.";
+"When you drag an app to the Trash, these folders stay behind forever. Nothing is ticked for you — an app you plan to reinstall keeps its settings this way." = "Cuando arrastras una app a la Papelera, estas carpetas quedan ahí para siempre. No marcamos nada por ti — así una app que pienses reinstalar conserva sus ajustes.";
+"Look for Leftovers" = "Buscar restos";
+"Comparing your Library with the apps you have installed…" = "Comparando tu Biblioteca con las apps que tienes instaladas…";
+"Nothing left behind" = "No quedó nada atrás";
+"Every folder in your Library belongs to an app you still have." = "Cada carpeta de tu Biblioteca pertenece a una app que aún tienes.";
+"Look Again" = "Buscar de nuevo";
+"last changed %@" = "último cambio %@";
+"Show the %lld items" = "Ver los %lld elementos";
+"Hide the %lld items" = "Ocultar los %lld elementos";
+"Move the leftovers of %lld apps to the Trash? If one of them comes back, it will start with its settings reset." = "¿Mover a la Papelera los restos de %lld apps? Si alguna vuelve, empezará con sus ajustes en blanco.";
+"Untouched %@" = "Sin tocar %@";
+"Xcode Device Support (symbols from connected devices)" = "Soporte de dispositivos de Xcode (símbolos de dispositivos conectados)";
+"Xcode Archives (builds you shipped — keeps crash symbols)" = "Archivos de Xcode (compilaciones publicadas — guardan los símbolos de fallos)";
+"Simulator Devices (erases apps and data inside them)" = "Dispositivos del Simulador (borra las apps y los datos que contienen)";
+"Simulator Runtimes (re-downloadable, several GB each)" = "Runtimes del Simulador (se pueden volver a descargar, varios GB cada uno)";
+"Xcode Device Logs" = "Registros de dispositivos de Xcode";
+
+/* Fase 3 — control del usuario */
+"Protected Folders" = "Carpetas protegidas";
+"Folders Chinchilla will never touch" = "Carpetas que Chinchilla nunca tocará";
+"Anything inside these folders is off limits — for cleaning, for the weekly auto-clean and for the command line." = "Nada dentro de estas carpetas se toca — ni al limpiar, ni en la limpieza semanal automática, ni desde la línea de comandos.";
+"Nothing is protected yet." = "Todavía no hay nada protegido.";
+"Stop protecting this folder" = "Dejar de proteger esta carpeta";
+"The list is a plain text file you can edit yourself: %@" = "La lista es un archivo de texto que puedes editar tú mismo: %@";
+"Add Folder…" = "Agregar carpeta…";
+"Show File" = "Mostrar archivo";
+"Protect" = "Proteger";
+"Chinchilla will never delete anything inside the folders you pick." = "Chinchilla nunca borrará nada dentro de las carpetas que elijas.";
+"Only clean when there's at least" = "Limpiar solo si hay al menos";
+"Always clean" = "Limpiar siempre";
+"Below that, Sunday passes in silence — no clean, no notification." = "Por debajo de eso, el domingo pasa en silencio — sin limpieza ni aviso.";

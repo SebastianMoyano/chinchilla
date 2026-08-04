@@ -37,6 +37,7 @@ extension Safety {
 
 struct DeepCleanView: View {
     @Environment(AppState.self) private var appState
+    @State private var showExclusions = false
 
     var body: some View {
         let model = appState.deepClean
@@ -62,6 +63,15 @@ struct DeepCleanView: View {
             }
         }
         .navigationTitle("Deep Clean")
+        .toolbar {
+            Button {
+                showExclusions = true
+            } label: {
+                Label("Protected Folders", systemImage: "lock.shield")
+            }
+            .help("Folders Chinchilla will never touch")
+        }
+        .sheet(isPresented: $showExclusions) { ExclusionsView() }
     }
 
     private func idleView(_ model: DeepCleanModel) -> some View {

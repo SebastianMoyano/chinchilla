@@ -2,13 +2,18 @@ import Foundation
 import Testing
 @testable import SystemKit
 
+/// Runs against whatever is live on the machine, so it asserts only what is
+/// true of any machine. Whether a given name gets folded is decided by
+/// `hostAppName`, which is tested against fixed input below — asserting it
+/// here made the suite fail whenever an unlucky process happened to be big.
 @Test func topConsumersAggregatesHelpers() {
     let apps = ProcessMemory.topConsumers(limit: 10, minFootprint: 1)
     #expect(!apps.isEmpty)
-    // Helper processes must be folded into their host app.
-    #expect(!apps.contains { $0.name.hasSuffix("Helper") || $0.name.contains("Helper (") })
-    // Sorted descending.
     #expect(apps == apps.sorted { $0.footprint > $1.footprint })
+    // Grouping means one row per app: a duplicate name would mean two
+    // processes of the same app were counted separately.
+    #expect(Set(apps.map(\.name)).count == apps.count)
+    #expect(apps.allSatisfy { !$0.name.isEmpty && $0.footprint > 0 })
 }
 
 @Test func hostAppNameGrouping() {

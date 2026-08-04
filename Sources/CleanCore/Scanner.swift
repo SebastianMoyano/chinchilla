@@ -19,6 +19,9 @@ public enum CleanScanner {
                 items.append(contentsOf: ruleItems)
             }
         }
+        // Refused at delete time anyway; dropping them here means the list
+        // never offers something it will then refuse.
+        items.removeAll { UserExclusions.isExcluded($0.path) }
         items.sort { $0.size > $1.size }
         return ScanReport(items: items)
     }

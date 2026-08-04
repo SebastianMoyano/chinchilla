@@ -23,7 +23,28 @@ final class ScheduleModel {
     var needsApproval = false
     var errorMessage: String?
 
+    // MARK: - Auto-clean threshold
+
+    static let minimumFreedMBKey = "autoCleanMinimumFreedMB"
+    static let defaultMinimumFreedMB = 200
+    static let minimumFreedChoicesMB = [0, 100, 200, 500, 1000]
+
+    /// Below this the scheduled run cleans nothing and sends no notification —
+    /// a weekly "freed 0 bytes" alert is how people learn to ignore alerts.
+    /// Read as a static so the headless run doesn't need the GUI model.
+    static var minimumFreedBytes: Int64 {
+        let mb = UserDefaults.standard.object(forKey: minimumFreedMBKey) as? Int
+            ?? defaultMinimumFreedMB
+        return Int64(mb) * 1_000_000
+    }
+
+    var minimumFreedMB: Int {
+        didSet { UserDefaults.standard.set(minimumFreedMB, forKey: Self.minimumFreedMBKey) }
+    }
+
     init() {
+        minimumFreedMB = UserDefaults.standard.object(forKey: Self.minimumFreedMBKey) as? Int
+            ?? Self.defaultMinimumFreedMB
         refreshStatus()
     }
 

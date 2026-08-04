@@ -102,6 +102,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let safeItems = RunningAppGuard.filterOutConflicts(
                 report.items.filter { $0.safety == .safe }
             )
+            // Not worth waking anyone for. Staying silent means no clean and
+            // no notification — a weekly "freed 0 bytes" just teaches people
+            // to ignore the thing.
+            let candidateBytes = safeItems.reduce(Int64(0)) { $0 + $1.size }
+            if candidateBytes < ScheduleModel.minimumFreedBytes {
+                NSApp.terminate(nil)
+                return
+            }
             let outcome = await Cleaner.clean(items: safeItems, dryRun: false)
 
             let content = UNMutableNotificationContent()

@@ -20,3 +20,56 @@
 "That window isn't open any more." = "That window isn't open any more.";
 "macOS wouldn't create the extra display." = "macOS wouldn't create the extra display.";
 "The extra display came up but couldn't be captured." = "The extra display came up but couldn't be captured.";
+
+/* Fase 1 — flota */
+"No cleans recorded yet." = "No cleans recorded yet.";
+"Free disk" = "Free disk";
+"Memory" = "Memory";
+"Uptime" = "Uptime";
+"Battery" = "Battery";
+"Zombies" = "Zombies";
+"MDM" = "MDM";
+"SMART" = "SMART";
+"yes" = "yes";
+"no" = "no";
+"%lld cycles" = "%lld cycles";
+
+/* Fase 2 — más basura */
+"Installed Apps" = "Installed Apps";
+"Leftovers" = "Leftovers";
+"Leftovers from apps you deleted" = "Leftovers from apps you deleted";
+"1. Chinchilla lists every app you have installed." = "1. Chinchilla lists every app you have installed.";
+"2. It looks at the folders apps leave in your Library — settings, saved data, caches." = "2. It looks at the folders apps leave in your Library — settings, saved data, caches.";
+"3. Anything that belongs to an app you no longer have shows up here." = "3. Anything that belongs to an app you no longer have shows up here.";
+"4. You pick what goes. Everything moves to the Trash, so you can put it back." = "4. You pick what goes. Everything moves to the Trash, so you can put it back.";
+"When you drag an app to the Trash, these folders stay behind forever. Nothing is ticked for you — an app you plan to reinstall keeps its settings this way." = "When you drag an app to the Trash, these folders stay behind forever. Nothing is ticked for you — an app you plan to reinstall keeps its settings this way.";
+"Look for Leftovers" = "Look for Leftovers";
+"Comparing your Library with the apps you have installed…" = "Comparing your Library with the apps you have installed…";
+"Nothing left behind" = "Nothing left behind";
+"Every folder in your Library belongs to an app you still have." = "Every folder in your Library belongs to an app you still have.";
+"Look Again" = "Look Again";
+"last changed %@" = "last changed %@";
+"Show the %lld items" = "Show the %lld items";
+"Hide the %lld items" = "Hide the %lld items";
+"Move the leftovers of %lld apps to the Trash? If one of them comes back, it will start with its settings reset." = "Move the leftovers of %lld apps to the Trash? If one of them comes back, it will start with its settings reset.";
+"Untouched %@" = "Untouched %@";
+"Xcode Device Support (symbols from connected devices)" = "Xcode Device Support (symbols from connected devices)";
+"Xcode Archives (builds you shipped — keeps crash symbols)" = "Xcode Archives (builds you shipped — keeps crash symbols)";
+"Simulator Devices (erases apps and data inside them)" = "Simulator Devices (erases apps and data inside them)";
+"Simulator Runtimes (re-downloadable, several GB each)" = "Simulator Runtimes (re-downloadable, several GB each)";
+"Xcode Device Logs" = "Xcode Device Logs";
+
+/* Fase 3 — control del usuario */
+"Protected Folders" = "Protected Folders";
+"Folders Chinchilla will never touch" = "Folders Chinchilla will never touch";
+"Anything inside these folders is off limits — for cleaning, for the weekly auto-clean and for the command line." = "Anything inside these folders is off limits — for cleaning, for the weekly auto-clean and for the command line.";
+"Nothing is protected yet." = "Nothing is protected yet.";
+"Stop protecting this folder" = "Stop protecting this folder";
+"The list is a plain text file you can edit yourself: %@" = "The list is a plain text file you can edit yourself: %@";
+"Add Folder…" = "Add Folder…";
+"Show File" = "Show File";
+"Protect" = "Protect";
+"Chinchilla will never delete anything inside the folders you pick." = "Chinchilla will never delete anything inside the folders you pick.";
+"Only clean when there's at least" = "Only clean when there's at least";
+"Always clean" = "Always clean";
+"Below that, Sunday passes in silence — no clean, no notification." = "Below that, Sunday passes in silence — no clean, no notification.";

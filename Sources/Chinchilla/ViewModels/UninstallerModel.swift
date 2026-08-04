@@ -68,6 +68,69 @@ final class UninstallerModel {
         }
     }
 
+    // MARK: - Leftovers from apps that are already gone
+
+    enum OrphanPhase: Equatable {
+        case idle, scanning, done
+    }
+
+    var orphanPhase: OrphanPhase = .idle
+    var orphans: [Orphan] = []
+    var selectedOrphans: Set<String> = []
+    var orphanResult: String?
+
+    var selectedOrphanBytes: Int64 {
+        orphans.filter { selectedOrphans.contains($0.id) }.reduce(0) { $0 + $1.size }
+    }
+
+    func scanOrphans() {
+        guard orphanPhase != .scanning else { return }
+        orphanPhase = .scanning
+        orphanResult = nil
+        Task {
+            let found = await OrphanFinder.scan()
+            orphans = found
+            // Nothing is pre-selected: these are `caution`, and the user is
+            // the only one who knows whether that app is coming back.
+            selectedOrphans = []
+            withAnimation(.spring) { orphanPhase = .done }
+        }
+    }
+
+    /// Trash every file of the selected groups. SafetyPolicy re-checks each
+    /// path even though the finder only ever looks inside ~/Library.
+    func trashSelectedOrphans() {
+        let groups = orphans.filter { selectedOrphans.contains($0.id) }
+        var failures: [String] = []
+        var trashed = 0
+        var done: Set<String> = []
+        for group in groups {
+            var groupFailed = false
+            for file in group.files {
+                do {
+                    try SafetyPolicy.validate(
+                        path: file.path, declaredRoots: OrphanFinder.declaredRoots
+                    )
+                    try FileManager.default.trashItem(
+                        at: URL(fileURLWithPath: file.path), resultingItemURL: nil
+                    )
+                    trashed += 1
+                } catch {
+                    groupFailed = true
+                    failures.append(
+                        "\((file.path as NSString).lastPathComponent): \(error.localizedDescription)"
+                    )
+                }
+            }
+            if !groupFailed { done.insert(group.id) }
+        }
+        orphans.removeAll { done.contains($0.id) }
+        selectedOrphans.subtract(done)
+        orphanResult = failures.isEmpty
+            ? String(localized: "Moved \(trashed) items to Trash.")
+            : failures.joined(separator: "\n")
+    }
+
     /// Everything goes to Trash — uninstalling is always recoverable.
     func uninstall() {
         guard let app = inspecting, !uninstalling else { return }

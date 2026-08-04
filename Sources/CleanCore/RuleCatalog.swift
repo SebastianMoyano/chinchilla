@@ -171,6 +171,67 @@ public enum RuleCatalog {
             safety: .safe
         ),
         CleanRule(
+            id: "dev.xcode.devicesupport",
+            category: .developer,
+            title: "Xcode Device Support (symbols from connected devices)",
+            patterns: [
+                "~/Library/Developer/Xcode/iOS DeviceSupport/*",
+                "~/Library/Developer/Xcode/watchOS DeviceSupport/*",
+                "~/Library/Developer/Xcode/tvOS DeviceSupport/*",
+                "~/Library/Developer/Xcode/visionOS DeviceSupport/*",
+            ],
+            // Xcode copies these back off the device the next time you plug it
+            // in — free again, but only while you still have that device.
+            safety: .moderate,
+            conflictingBundleIDs: ["com.apple.dt.Xcode"]
+        ),
+        CleanRule(
+            id: "dev.xcode.archives",
+            category: .developer,
+            title: "Xcode Archives (builds you shipped — keeps crash symbols)",
+            patterns: ["~/Library/Developer/Xcode/Archives/*"],
+            // Without the archive, crash reports from that build never
+            // symbolicate again. To the Trash, and never pre-selected.
+            safety: .caution,
+            deleteMode: .trash,
+            conflictingBundleIDs: ["com.apple.dt.Xcode"]
+        ),
+        CleanRule(
+            id: "dev.simulator.devices",
+            category: .developer,
+            title: "Simulator Devices (erases apps and data inside them)",
+            patterns: ["~/Library/Developer/CoreSimulator/Devices/*"],
+            // One folder = one simulated iPhone with everything installed on
+            // it. `simctl delete unavailable` is the surgical version; a file
+            // rule can't tell which are unavailable, so it goes to the Trash
+            // as caution and the user picks.
+            safety: .caution,
+            deleteMode: .trash,
+            skipNames: ["device_set.plist"],
+            conflictingBundleIDs: ["com.apple.dt.Xcode", "com.apple.iphonesimulator"]
+        ),
+        CleanRule(
+            id: "dev.simulator.runtimes",
+            category: .developer,
+            title: "Simulator Runtimes (re-downloadable, several GB each)",
+            patterns: ["~/Library/Developer/CoreSimulator/Profiles/Runtimes/*"],
+            // Xcode re-downloads a runtime on demand; deleting one that a
+            // device still points at makes that device unavailable.
+            safety: .caution,
+            conflictingBundleIDs: ["com.apple.dt.Xcode"]
+        ),
+        CleanRule(
+            id: "dev.xcode.devicelogs",
+            category: .developer,
+            title: "Xcode Device Logs",
+            patterns: [
+                "~/Library/Developer/Xcode/iOS Device Logs/*",
+                "~/Library/Developer/Xcode/watchOS Device Logs/*",
+            ],
+            safety: .safe,
+            conflictingBundleIDs: ["com.apple.dt.Xcode"]
+        ),
+        CleanRule(
             id: "dev.npm",
             category: .developer,
             title: "npm Cache",
