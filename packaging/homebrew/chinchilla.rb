@@ -2,8 +2,8 @@
 # Copy to Casks/chinchilla.rb in that repo on every release and replace the
 # two PLACEHOLDER values below — nothing else changes between versions.
 cask "chinchilla" do
-  version "0.0.0"                                                            # PLACEHOLDER: CFBundleShortVersionString of the release
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"  # PLACEHOLDER: shasum -a 256 dist/Chinchilla-<version>.dmg
+  version "0.12.0"                                                            # PLACEHOLDER: CFBundleShortVersionString of the release
+  sha256 "97d88dc7fd72cd1bbd5503f05a7b27620ebee2de32e5e46c0480d40fe481f816"  # PLACEHOLDER: shasum -a 256 dist/Chinchilla-<version>.dmg
 
   url "https://github.com/SebastianMoyano/chinchilla/releases/download/v#{version}/Chinchilla-#{version}.dmg",
       verified: "github.com/SebastianMoyano/chinchilla/"
