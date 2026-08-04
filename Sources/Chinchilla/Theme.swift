@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// The app's design tokens, taken from the reference mockups.
 ///
@@ -8,10 +9,10 @@ import SwiftUI
 /// what either meant. That's why the app looked assembled rather than
 /// designed.
 ///
-/// These are the mockups' own values, not approximations of them. The palette
-/// is dark by construction — its surfaces are near-black and its text is
-/// near-white — so the window pins itself to dark rather than washing out
-/// under a light system appearance.
+/// The dark values are the mockups' own, not approximations. The light ones
+/// are their Material 3 counterparts, because a palette that only works at
+/// night is half a palette — every token resolves per appearance and follows
+/// the system switch on its own.
 ///
 /// What is *not* copied is deliberate. SF Pro instead of Inter, SF Symbols
 /// instead of Material Symbols: those are what macOS draws in every other
@@ -26,59 +27,81 @@ import SwiftUI
 /// edges. Sitting beside real Mac controls, a glowing button reads as a toy.
 enum Theme {
 
-    private static func hex(_ value: UInt32, alpha: Double = 1) -> Color {
-        Color(
-            .sRGB,
-            red: Double((value >> 16) & 0xFF) / 255,
+    private static func nsColor(_ value: UInt32, _ alpha: Double) -> NSColor {
+        NSColor(
+            srgbRed: Double((value >> 16) & 0xFF) / 255,
             green: Double((value >> 8) & 0xFF) / 255,
             blue: Double(value & 0xFF) / 255,
-            opacity: alpha
+            alpha: alpha
         )
     }
 
-    // MARK: Surfaces
+    /// One token, two values. Resolved by AppKit per appearance, so the whole
+    /// palette follows the system switch — including mid-session, and
+    /// including "Auto" at sunset.
+    private static func dual(dark: UInt32, light: UInt32, alpha: Double = 1) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                ? nsColor(dark, alpha) : nsColor(light, alpha)
+        })
+    }
 
-    static let background = hex(0x131315)
-    static let surface = hex(0x131315)
-    static let surfaceContainerLowest = hex(0x0E0E10)
-    static let surfaceContainerLow = hex(0x1B1B1D)
-    static let surfaceContainer = hex(0x1F1F21)
-    static let surfaceContainerHigh = hex(0x2A2A2C)
-    static let surfaceContainerHighest = hex(0x353437)
+    // MARK: Surfaces
+    //
+    // The dark values are the mockups'. The light ones are their Material 3
+    // counterparts — the same neutral ramp mirrored, which is what the scheme
+    // the mockups were generated from specifies for a light surface.
+
+    static let background = dual(dark: 0x131315, light: 0xFAF9FA)
+    static let surface = dual(dark: 0x131315, light: 0xFAF9FA)
+    static let surfaceContainerLowest = dual(dark: 0x0E0E10, light: 0xFFFFFF)
+    static let surfaceContainerLow = dual(dark: 0x1B1B1D, light: 0xF4F3F5)
+    static let surfaceContainer = dual(dark: 0x1F1F21, light: 0xEEEDEF)
+    static let surfaceContainerHigh = dual(dark: 0x2A2A2C, light: 0xE8E7EA)
+    static let surfaceContainerHighest = dual(dark: 0x353437, light: 0xE3E2E4)
 
     // MARK: Text
 
-    static let onSurface = hex(0xE4E2E4)
-    /// Secondary copy — a cool grey, not plain 60% white.
-    static let onSurfaceVariant = hex(0xC1C6D7)
-    static let outline = hex(0x8B90A0)
-    static let outlineVariant = hex(0x414755)
+    static let onSurface = dual(dark: 0xE4E2E4, light: 0x1B1B1D)
+    /// Secondary copy — a cool grey, not plain 60% of the text colour.
+    static let onSurfaceVariant = dual(dark: 0xC1C6D7, light: 0x44474F)
+    static let outline = dual(dark: 0x8B90A0, light: 0x74788A)
+    static let outlineVariant = dual(dark: 0x414755, light: 0xC4C7D4)
 
     // MARK: Accent and status
     //
-    // One meaning each, so a glance is enough:
+    // One meaning each, so a glance is enough. Light-mode accents are the
+    // mockups' own "fixed variant" tones, which is exactly what Material 3
+    // defines those for: the version of each colour that stays legible on a
+    // light surface. Caution is the one derived value — the reference palette
+    // has no amber, and reusing its salmon would make "look at this" and
+    // "this is wrong" the same colour.
 
-    /// Actions the user can start. The mockups use the system blue for the
-    /// one button that matters on each screen.
-    static let action = hex(0x007AFF)
+    /// Actions the user can start. macOS uses this blue in both appearances.
+    static let action = dual(dark: 0x007AFF, light: 0x007AFF)
     /// Filled accent — rings, progress, selected state.
-    static let primaryContainer = hex(0x4B8EFF)
-    /// Accent for text and thin strokes on dark surfaces; the softer one
-    /// exists because #4B8EFF on near-black is hard to read at small sizes.
-    static let primary = hex(0xADC6FF)
+    static let primaryContainer = dual(dark: 0x4B8EFF, light: 0x005BC1)
+    /// Accent for text and thin strokes: #4B8EFF is hard to read on
+    /// near-black at small sizes, and #ADC6FF is unreadable on white.
+    static let primary = dual(dark: 0xADC6FF, light: 0x004493)
     /// Healthy, finished, safe to remove.
-    static let ok = hex(0x42E355)
+    static let ok = dual(dark: 0x42E355, light: 0x005313)
     /// Worth a look before acting.
-    static let caution = hex(0xFFB4AA)
+    static let caution = dual(dark: 0xFFB4AA, light: 0x8A5000)
     /// Needs attention, or destructive.
-    static let danger = hex(0xFF5447)
-    static let error = hex(0xFFB4AB)
+    static let danger = dual(dark: 0xFF5447, light: 0x930007)
+    static let error = dual(dark: 0xFFB4AB, light: 0x93000A)
 
     // MARK: Card surface
+    //
+    // A white veil lifts a card off a dark window; on a light one it
+    // disappears. These invert.
 
-    static let cardFill = Color.white.opacity(0.05)
-    static let cardFillActive = Color.white.opacity(0.09)
-    static let cardStroke = Color.white.opacity(0.10)
+    static let cardFill = dual(dark: 0xFFFFFF, light: 0x000000, alpha: 0.05)
+    static let cardFillActive = dual(dark: 0xFFFFFF, light: 0x000000, alpha: 0.09)
+    static let cardStroke = dual(dark: 0xFFFFFF, light: 0x000000, alpha: 0.10)
+    /// Unfilled track behind a progress ring.
+    static let track = dual(dark: 0xFFFFFF, light: 0x000000, alpha: 0.10)
 
     // MARK: Geometry
 

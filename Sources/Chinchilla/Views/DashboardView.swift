@@ -118,7 +118,7 @@ struct DashboardView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
-            Color.white.opacity(0.05),
+            Theme.cardFill,
             in: RoundedRectangle(cornerRadius: Theme.tileRadius, style: .continuous)
         )
     }
@@ -240,7 +240,7 @@ struct DiskRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.10), style: StrokeStyle(lineWidth: diameter * 0.075))
+                .stroke(Theme.track, style: StrokeStyle(lineWidth: diameter * 0.075))
             Circle()
                 .trim(from: 0, to: max(0.02, usage.usedFraction))
                 .stroke(color, style: StrokeStyle(lineWidth: diameter * 0.075, lineCap: .round))
