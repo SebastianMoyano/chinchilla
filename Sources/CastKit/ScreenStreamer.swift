@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import ScreenCaptureKit
 import CoreGraphics
+import VirtualDisplayKit
 
 public enum MirrorQuality: String, Sendable, CaseIterable {
     case p720, p1080
@@ -21,21 +22,19 @@ public enum MirrorQuality: String, Sendable, CaseIterable {
     }
 }
 
-/// What gets sent to the TV.
-///
-/// macOS won't let an app add a real second desktop — that needs a DriverKit
-/// display extension and an entitlement Apple grants case by case (the old
-/// `CGVirtualDisplay` route accepts the settings and then never brings the
-/// display up). So the useful version of "extend my screen" here is picking
-/// *what* to send: a single window can sit on the TV while you carry on
-/// working, which is what people actually want it for.
+/// What gets sent to the TV: the desk you already have, a new one, or one
+/// window parked over there.
 public enum MirrorSource: Sendable, Hashable {
     case wholeScreen
+    /// A genuine second desktop, created in software and sent to the TV —
+    /// macOS arranges windows onto it exactly like a plugged-in monitor.
+    case extendedDisplay
     case window(id: CGWindowID, title: String, app: String)
 
     public var label: String {
         switch self {
         case .wholeScreen: String(localized: "Whole screen")
+        case .extendedDisplay: String(localized: "Extended display (second desktop)")
         case .window(_, let title, let app): title.isEmpty ? app : "\(app) — \(title)"
         }
     }
@@ -65,6 +64,9 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
     public private(set) var isRunning = false
     /// Set when the stream dies on its own (display disconnected, etc.).
     public var onStopped: (@Sendable (String?) -> Void)?
+
+    /// Held for the life of the stream: releasing it unplugs the display.
+    private var virtualDisplay: ChinchillaVirtualDisplay?
 
     /// Set to bypass the HLS segmenter and receive raw frames — the
     /// low-latency path encodes them itself.
@@ -96,6 +98,10 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
         switch source {
         case .wholeScreen:
             return captureSize(for: quality, display: try await mainDisplay())
+        case .extendedDisplay:
+            // The virtual display is created at the quality's own size, so
+            // the desktop matches what the TV will show pixel for pixel.
+            return quality.size
         case .window(let windowID, _, _):
             let content = try await withTimeout(.seconds(8), "Screen capture") {
                 Unchecked(try await SCShareableContent.excludingDesktopWindows(
@@ -161,6 +167,42 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
 
         let display = try await Self.mainDisplay()
         var (width, height) = Self.captureSize(for: quality, display: display)
+        var chosenDisplay = display
+
+        // A second desktop: bring the display up first, then capture it like
+        // any other. macOS moves windows onto it the moment it appears.
+        if case .extendedDisplay = source {
+            let (w, h) = quality.size
+            let virtual = ChinchillaVirtualDisplay(
+                name: "Chinchilla TV", width: UInt32(w), height: UInt32(h), refreshRate: 60
+            )
+            guard virtual.isActive else {
+                throw NSError(domain: "CastKit", code: 12, userInfo: [
+                    NSLocalizedDescriptionKey: String(
+                        localized: "macOS wouldn't create the extra display."
+                    ),
+                ])
+            }
+            self.virtualDisplay = virtual
+            let content = try await withTimeout(.seconds(8), "Screen capture") {
+                Unchecked(try await SCShareableContent.excludingDesktopWindows(
+                    false, onScreenWindowsOnly: false
+                ))
+            }.value
+            guard let scDisplay = content.displays.first(where: {
+                $0.displayID == virtual.displayID
+            }) else {
+                self.virtualDisplay = nil
+                throw NSError(domain: "CastKit", code: 13, userInfo: [
+                    NSLocalizedDescriptionKey: String(
+                        localized: "The extra display came up but couldn't be captured."
+                    ),
+                ])
+            }
+            chosenDisplay = scDisplay
+            width = w
+            height = h
+        }
 
         // A single window: size the stream to the window, so the TV shows it
         // filling the screen instead of a small rectangle on a big desktop.
@@ -206,7 +248,7 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
         configuration.channelCount = 2
 
         let filter = windowFilter
-            ?? SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+            ?? SCContentFilter(display: chosenDisplay, excludingApplications: [], exceptingWindows: [])
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: videoQueue)
         if includeAudio {
@@ -234,6 +276,9 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
             }
         }
         stream = nil
+        // Unplug the extra desktop; windows on it move back to the real one.
+        virtualDisplay?.invalidate()
+        virtualDisplay = nil
         await segmenter?.finish()
         segmenter = nil
     }

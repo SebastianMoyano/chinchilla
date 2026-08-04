@@ -18,3 +18,5 @@
 
 /* Cast: per-device capabilities and mirror source (0.12.0) */
 "That window isn't open any more." = "That window isn't open any more.";
+"macOS wouldn't create the extra display." = "macOS wouldn't create the extra display.";
+"The extra display came up but couldn't be captured." = "The extra display came up but couldn't be captured.";

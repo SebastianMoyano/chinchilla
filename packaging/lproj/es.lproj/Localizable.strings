@@ -497,3 +497,8 @@
 "Refresh the list of open windows" = "Actualizar la lista de ventanas abiertas";
 "Only that window goes to the TV — you can keep using the Mac for anything else. macOS doesn't let apps add a real second desktop, so this is the closest thing: a second screen showing one thing." = "Solo esa ventana va al TV — puedes seguir usando el Mac para cualquier otra cosa. macOS no permite que una app agregue un segundo escritorio real, así que esto es lo más cercano: una segunda pantalla mostrando una sola cosa.";
 "That window isn't open any more." = "Esa ventana ya no está abierta.";
+"Extended display (second desktop)" = "Pantalla extendida (segundo escritorio)";
+"The TV becomes a real second desktop: drag windows onto it, and macOS treats it like any monitor. It disappears when you stop — no driver, nothing installed." = "El TV se convierte en un segundo escritorio real: arrastra ventanas hacia allá y macOS lo trata como cualquier monitor. Desaparece al detener — sin drivers, sin instalar nada.";
+"Only that window goes to the TV — you can keep using the Mac for anything else." = "Solo esa ventana va al TV — puedes seguir usando el Mac para cualquier otra cosa.";
+"macOS wouldn't create the extra display." = "macOS no pudo crear la pantalla adicional.";
+"The extra display came up but couldn't be captured." = "La pantalla adicional se creó pero no se pudo capturar.";

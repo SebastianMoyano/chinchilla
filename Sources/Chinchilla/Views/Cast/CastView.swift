@@ -363,15 +363,14 @@ struct MirrorCard: View {
                     Spacer()
                 }
 
-                // macOS won't let an app add a real second desktop — that
-                // needs a system extension. Choosing what to send is the part
-                // that's actually useful, and it's fully supported.
                 HStack(spacing: 12) {
                     Picker("Send", selection: Binding(
                         get: { model.mirrorSource },
                         set: { model.mirrorSource = $0 }
                     )) {
                         Text("Whole screen").tag(MirrorSource.wholeScreen)
+                        Text("Extended display (second desktop)")
+                            .tag(MirrorSource.extendedDisplay)
                         ForEach(model.availableWindows, id: \.self) { window in
                             Text(verbatim: window.label).tag(window)
                         }
@@ -390,7 +389,13 @@ struct MirrorCard: View {
                 .onAppear { model.refreshWindows() }
 
                 if case .window = model.mirrorSource {
-                    Label("Only that window goes to the TV — you can keep using the Mac for anything else. macOS doesn't let apps add a real second desktop, so this is the closest thing: a second screen showing one thing.", systemImage: "macwindow.on.rectangle")
+                    Label("Only that window goes to the TV — you can keep using the Mac for anything else.", systemImage: "macwindow.on.rectangle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if case .extendedDisplay = model.mirrorSource {
+                    Label("The TV becomes a real second desktop: drag windows onto it, and macOS treats it like any monitor. It disappears when you stop — no driver, nothing installed.", systemImage: "rectangle.on.rectangle.angled")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
