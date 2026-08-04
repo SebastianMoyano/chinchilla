@@ -21,6 +21,26 @@ public enum MirrorQuality: String, Sendable, CaseIterable {
     }
 }
 
+/// What gets sent to the TV.
+///
+/// macOS won't let an app add a real second desktop — that needs a DriverKit
+/// display extension and an entitlement Apple grants case by case (the old
+/// `CGVirtualDisplay` route accepts the settings and then never brings the
+/// display up). So the useful version of "extend my screen" here is picking
+/// *what* to send: a single window can sit on the TV while you carry on
+/// working, which is what people actually want it for.
+public enum MirrorSource: Sendable, Hashable {
+    case wholeScreen
+    case window(id: CGWindowID, title: String, app: String)
+
+    public var label: String {
+        switch self {
+        case .wholeScreen: String(localized: "Whole screen")
+        case .window(_, let title, let app): title.isEmpty ? app : "\(app) — \(title)"
+        }
+    }
+}
+
 /// Screen Recording permission — the same probe/guide pattern as Full Disk
 /// Access elsewhere in the app.
 public enum ScreenRecordingPermission {
@@ -68,6 +88,35 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
     /// ScreenCaptureKit's content query can hang indefinitely when its daemon
     /// is wedged — it neither returns nor throws. Anything waiting on it needs
     /// its own clock.
+    /// The stream size for a source. Callers that must describe the stream
+    /// before it starts — the Cast offer, for one — need this up front.
+    public static func captureSize(
+        for quality: MirrorQuality, source: MirrorSource
+    ) async throws -> (width: Int, height: Int) {
+        switch source {
+        case .wholeScreen:
+            return captureSize(for: quality, display: try await mainDisplay())
+        case .window(let windowID, _, _):
+            let content = try await withTimeout(.seconds(8), "Screen capture") {
+                Unchecked(try await SCShareableContent.excludingDesktopWindows(
+                    true, onScreenWindowsOnly: true
+                ))
+            }.value
+            guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
+                throw NSError(domain: "CastKit", code: 11, userInfo: [
+                    NSLocalizedDescriptionKey: String(
+                        localized: "That window isn't open any more."
+                    ),
+                ])
+            }
+            let (boxWidth, boxHeight) = quality.size
+            let scale = min(Double(boxWidth) / window.frame.width,
+                            Double(boxHeight) / window.frame.height, 1)
+            return (max(2, Int((window.frame.width * scale / 2).rounded()) * 2),
+                    max(2, Int((window.frame.height * scale / 2).rounded()) * 2))
+        }
+    }
+
     public static func mainDisplay(timeout: Duration = .seconds(8)) async throws -> SCDisplay {
         let content = try await withTimeout(timeout, "Screen capture") {
             Unchecked(try await SCShareableContent.excludingDesktopWindows(
@@ -81,14 +130,61 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
         return display
     }
 
+    /// Windows that are worth offering as a mirroring source: on screen, big
+    /// enough to be a real window, and not our own.
+    public static func mirrorableWindows() async throws -> [MirrorSource] {
+        let content = try await withTimeout(.seconds(8), "Screen capture") {
+            Unchecked(try await SCShareableContent.excludingDesktopWindows(
+                true, onScreenWindowsOnly: true
+            ))
+        }.value
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        return content.windows
+            .filter { $0.owningApplication?.processID != ownPID }
+            .filter { $0.frame.width > 200 && $0.frame.height > 150 }
+            .sorted { ($0.owningApplication?.applicationName ?? "") < ($1.owningApplication?.applicationName ?? "") }
+            .map {
+                .window(
+                    id: $0.windowID,
+                    title: $0.title ?? "",
+                    app: $0.owningApplication?.applicationName ?? "?"
+                )
+            }
+    }
+
     public func start(
-        quality: MirrorQuality, includeAudio: Bool, frameRate: Int = 30
+        quality: MirrorQuality, includeAudio: Bool, frameRate: Int = 30,
+        source: MirrorSource = .wholeScreen
     ) async throws {
         guard !isRunning else { return }
         store.reset()
 
         let display = try await Self.mainDisplay()
-        let (width, height) = Self.captureSize(for: quality, display: display)
+        var (width, height) = Self.captureSize(for: quality, display: display)
+
+        // A single window: size the stream to the window, so the TV shows it
+        // filling the screen instead of a small rectangle on a big desktop.
+        var windowFilter: SCContentFilter?
+        if case .window(let windowID, _, _) = source {
+            let content = try await withTimeout(.seconds(8), "Screen capture") {
+                Unchecked(try await SCShareableContent.excludingDesktopWindows(
+                    true, onScreenWindowsOnly: true
+                ))
+            }.value
+            guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
+                throw NSError(domain: "CastKit", code: 11, userInfo: [
+                    NSLocalizedDescriptionKey: String(
+                        localized: "That window isn't open any more."
+                    ),
+                ])
+            }
+            let (box, boxHeight) = quality.size
+            let scale = min(Double(box) / window.frame.width,
+                            Double(boxHeight) / window.frame.height, 1)
+            width = max(2, Int((window.frame.width * scale / 2).rounded()) * 2)
+            height = max(2, Int((window.frame.height * scale / 2).rounded()) * 2)
+            windowFilter = SCContentFilter(desktopIndependentWindow: window)
+        }
 
         // The low-latency path owns its own encoder, so no segmenter.
         if onVideoSample == nil {
@@ -109,7 +205,8 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
         configuration.sampleRate = 48_000
         configuration.channelCount = 2
 
-        let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+        let filter = windowFilter
+            ?? SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: videoQueue)
         if includeAudio {

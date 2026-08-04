@@ -15,3 +15,6 @@
 /* Uptime: telling sleep apart from a restart (0.11.2) */
 "Starting the mirror took too long. Try again." = "Starting the mirror took too long. Try again.";
 "%@ didn't respond in time." = "%@ didn't respond in time.";
+
+/* Cast: per-device capabilities and mirror source (0.12.0) */
+"That window isn't open any more." = "That window isn't open any more.";

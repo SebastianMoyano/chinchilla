@@ -32,6 +32,37 @@ struct CastTarget: Identifiable, Hashable {
         if case .dlna(let renderer) = kind { return renderer.modelDescription }
         return nil
     }
+
+    /// What this device can actually do — the question the list used to leave
+    /// unanswered. Mirroring being greyed out with no explanation reads as a
+    /// bug; saying "this one only plays files" reads as an answer.
+    var canPlayFiles: Bool { true }
+
+    var canMirror: Bool {
+        switch kind {
+        case .googlecast, .fcast: true
+        case .dlna: false      // DLNA moves files around; it has no live input
+        }
+    }
+
+    /// Chromecast devices carry the same mirroring receiver Chrome uses, which
+    /// negotiates its delay instead of buffering like a media player.
+    var hasFastMirror: Bool {
+        if case .googlecast = kind { return true }
+        return false
+    }
+
+    var capabilityLabel: LocalizedStringKey {
+        switch kind {
+        case .googlecast: "Files and screen mirroring · under half a second"
+        case .fcast: "Files and screen mirroring · 2–3 seconds"
+        case .dlna: "Files only — this one can't mirror your screen"
+        }
+    }
+
+    var capabilityTint: Color {
+        canMirror ? .green : .secondary
+    }
 }
 
 @MainActor
@@ -88,6 +119,10 @@ final class CastModel {
     var mirrorDelayMs = 400
     /// Set when the fast path wasn't available and we fell back.
     var mirrorUsingFallback = false
+    /// Whole screen, or one window parked on the TV while you keep working.
+    var mirrorSource: MirrorSource = .wholeScreen
+    var availableWindows: [MirrorSource] = []
+    var loadingWindows = false
     private var fastMirror: CastMirrorSession?
     /// Bumped whenever mirroring is asked to stop, so a start that's still in
     /// flight can tell it was cancelled and tear itself down.
@@ -104,6 +139,25 @@ final class CastModel {
     /// Chromecast devices have the fast receiver; FCast doesn't.
     var supportsFastMirror: Bool {
         if case .googlecast = connected?.kind { true } else { false }
+    }
+
+    /// Windows are listed on demand: the list is stale the moment it's built,
+    /// so it's refreshed when the picker is opened rather than polled.
+    func refreshWindows() {
+        guard !loadingWindows else { return }
+        loadingWindows = true
+        Task {
+            defer { loadingWindows = false }
+            availableWindows = (try? await ScreenStreamer.mirrorableWindows()) ?? []
+            // The chosen window may have been closed since.
+            if case .window(let id, _, _) = mirrorSource,
+               !availableWindows.contains(where: {
+                   if case .window(let other, _, _) = $0 { return other == id }
+                   return false
+               }) {
+                mirrorSource = .wholeScreen
+            }
+        }
     }
 
     func refreshScreenPermission() {
@@ -148,7 +202,8 @@ final class CastModel {
             if case .googlecast(let device) = target.kind, mirrorFastPath {
                 let fast = CastMirrorSession(
                     host: device.host, quality: mirrorQuality,
-                    includeAudio: mirrorAudio, playoutDelayMs: mirrorDelayMs
+                    includeAudio: mirrorAudio, source: mirrorSource,
+                    playoutDelayMs: mirrorDelayMs
                 )
                 fast.onStopped = { message in
                     Task { @MainActor [weak self] in
@@ -231,7 +286,10 @@ final class CastModel {
                         if let message { self?.mirrorError = message }
                     }
                 }
-                try await streamer.start(quality: mirrorQuality, includeAudio: mirrorAudio)
+                try await streamer.start(
+                    quality: mirrorQuality, includeAudio: mirrorAudio,
+                    source: mirrorSource
+                )
                 // Don't hand the TV a playlist before the first segment exists.
                 // Progressive needs only the init segment; HLS wants a few
                 // parts in the playlist before a player will touch it.

@@ -94,6 +94,13 @@ struct CastView: View {
                                 .background(.indigo.opacity(0.15), in: Capsule())
                                 .foregroundStyle(.indigo)
                         }
+                        HStack(spacing: 4) {
+                            Image(systemName: target.canMirror
+                                  ? "rectangle.on.rectangle" : "doc")
+                            Text(target.capabilityLabel)
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(target.capabilityTint)
                         if let subtitle = target.subtitle {
                             Text(verbatim: subtitle)
                                 .font(.caption2)
@@ -354,6 +361,39 @@ struct MirrorCard: View {
                     ))
                     .toggleStyle(.checkbox)
                     Spacer()
+                }
+
+                // macOS won't let an app add a real second desktop — that
+                // needs a system extension. Choosing what to send is the part
+                // that's actually useful, and it's fully supported.
+                HStack(spacing: 12) {
+                    Picker("Send", selection: Binding(
+                        get: { model.mirrorSource },
+                        set: { model.mirrorSource = $0 }
+                    )) {
+                        Text("Whole screen").tag(MirrorSource.wholeScreen)
+                        ForEach(model.availableWindows, id: \.self) { window in
+                            Text(verbatim: window.label).tag(window)
+                        }
+                    }
+                    .frame(maxWidth: 320)
+                    if model.loadingWindows { ProgressView().controlSize(.mini) }
+                    Button {
+                        model.refreshWindows()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .controlSize(.small)
+                    .help("Refresh the list of open windows")
+                    Spacer()
+                }
+                .onAppear { model.refreshWindows() }
+
+                if case .window = model.mirrorSource {
+                    Label("Only that window goes to the TV — you can keep using the Mac for anything else. macOS doesn't let apps add a real second desktop, so this is the closest thing: a second screen showing one thing.", systemImage: "macwindow.on.rectangle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if model.supportsFastMirror {

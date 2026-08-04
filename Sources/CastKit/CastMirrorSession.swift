@@ -29,6 +29,7 @@ public final class CastMirrorSession: @unchecked Sendable {
     public let quality: MirrorQuality
     public let frameRate: Int
     public let includeAudio: Bool
+    public let source: MirrorSource
     public private(set) var playoutDelayMs: Int
     /// False when the receiver took video but turned audio down, so the UI
     /// can say so instead of leaving the user wondering.
@@ -49,20 +50,23 @@ public final class CastMirrorSession: @unchecked Sendable {
     public init(
         host: String, quality: MirrorQuality = .p720,
         frameRate: Int = 30, includeAudio: Bool = true,
+        source: MirrorSource = .wholeScreen,
         playoutDelayMs: Int = CastStreaming.defaultTargetDelayMs
     ) {
         self.host = host
         self.quality = quality
         self.frameRate = frameRate
         self.includeAudio = includeAudio
+        self.source = source
         self.playoutDelayMs = playoutDelayMs
     }
 
     public func start() async throws {
-        guard let display = try? await ScreenStreamer.mainDisplay() else {
+        guard let size = try? await ScreenStreamer.captureSize(
+            for: quality, source: source
+        ) else {
             throw Failure.noDisplay
         }
-        let size = ScreenStreamer.captureSize(for: quality, display: display)
 
         // The offer has to describe what we will actually send.
         var offer = CastStreaming.Offer()
@@ -169,7 +173,8 @@ public final class CastMirrorSession: @unchecked Sendable {
         }
         streamer.onStopped = { [weak self] message in self?.onStopped?(message) }
         try await streamer.start(
-            quality: quality, includeAudio: audioAccepted, frameRate: frameRate
+            quality: quality, includeAudio: audioAccepted, frameRate: frameRate,
+            source: source
         )
 
         self.encoder = encoder

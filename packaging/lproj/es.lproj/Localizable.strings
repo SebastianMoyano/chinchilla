@@ -487,3 +487,13 @@
 "Apps you chose are paused. Ending the session brings them all back." = "Las apps que elegiste están en pausa. Al terminar la sesión vuelven todas.";
 "Tabs sleep, the weekly clean is scheduled, and memory pressure is watched." = "Las pestañas duermen, la limpieza semanal está programada y se vigila la presión de memoria.";
 "Turn on Daily mode for everyday use, or start a Gaming session before you play." = "Activa el Modo diario para el uso de todos los días, o inicia una sesión de juego antes de jugar.";
+
+/* Cast: capacidades por dispositivo y fuente del espejo (0.12.0) */
+"Files and screen mirroring · under half a second" = "Archivos y espejo de pantalla · menos de medio segundo";
+"Files and screen mirroring · 2–3 seconds" = "Archivos y espejo de pantalla · 2–3 segundos";
+"Files only — this one can't mirror your screen" = "Solo archivos — este no puede espejar tu pantalla";
+"Send" = "Enviar";
+"Whole screen" = "Toda la pantalla";
+"Refresh the list of open windows" = "Actualizar la lista de ventanas abiertas";
+"Only that window goes to the TV — you can keep using the Mac for anything else. macOS doesn't let apps add a real second desktop, so this is the closest thing: a second screen showing one thing." = "Solo esa ventana va al TV — puedes seguir usando el Mac para cualquier otra cosa. macOS no permite que una app agregue un segundo escritorio real, así que esto es lo más cercano: una segunda pantalla mostrando una sola cosa.";
+"That window isn't open any more." = "Esa ventana ya no está abierta.";
