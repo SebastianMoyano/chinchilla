@@ -1,5 +1,6 @@
 import Foundation
 import ScreenCaptureKit
+import DiskScanKit
 
 /// Low-latency screen mirroring to a Cast device.
 ///
@@ -35,6 +36,10 @@ public final class CastMirrorSession: @unchecked Sendable {
     /// False when the receiver took video but turned audio down, so the UI
     /// can say so instead of leaving the user wondering.
     public private(set) var audioAccepted = false
+    /// Whether audio is actually being delivered right now. The stream is
+    /// always negotiated so this can be flipped live: renegotiating an OFFER
+    /// mid-cast would mean tearing the picture down to change a checkbox.
+    private let sendAudio = Locked(true)
 
     private var session: GoogleCastSession?
     private var transport: CastStreamTransport?
@@ -77,7 +82,9 @@ public final class CastMirrorSession: @unchecked Sendable {
         offer.height = size.height
         offer.frameRate = frameRate
         offer.videoBitRate = quality.bitrate
-        offer.includeAudio = includeAudio
+        // Always offered, even when it starts switched off — see `sendAudio`.
+        offer.includeAudio = true
+        sendAudio.withLock { $0 = includeAudio }
         offer.targetDelayMs = playoutDelayMs
         let sealed = offer
 
@@ -170,7 +177,9 @@ public final class CastMirrorSession: @unchecked Sendable {
         // properties from another thread.
         streamer.onVideoSample = { [weak encoder] buffer in encoder?.encode(buffer) }
         if let audioEncoder {
+            let gate = sendAudio
             streamer.onAudioSample = { [weak audioEncoder] buffer in
+                guard gate.withLock({ $0 }) else { return }
                 audioEncoder?.encode(buffer)
             }
         }
@@ -183,6 +192,17 @@ public final class CastMirrorSession: @unchecked Sendable {
         self.encoder = encoder
         self.sender = sender
         self.streamer = streamer
+    }
+
+    /// Turns the sound on or off without touching the picture.
+    public func setSendAudio(_ on: Bool) {
+        sendAudio.withLock { $0 = on }
+    }
+
+    /// Moves the extra desktop to the other side of the real one, live.
+    public func setExtendedSide(_ side: ExtendedSide) {
+        guard case .extendedDisplay = source else { return }
+        streamer?.repositionVirtualDisplay(on: side, quality: quality)
     }
 
     /// Changes how long the receiver holds frames, live — it rides along on

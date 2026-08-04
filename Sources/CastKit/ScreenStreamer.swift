@@ -173,6 +173,12 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
             }
     }
 
+    /// Moves an already-running extra desktop to the other side.
+    public func repositionVirtualDisplay(on side: ExtendedSide, quality: MirrorQuality) {
+        guard let display = virtualDisplay, display.isActive else { return }
+        Self.place(display: display.displayID, on: side, size: quality.size)
+    }
+
     /// Puts the virtual display beside the real one. `kCGConfigureForSession`
     /// rather than permanently: this display is temporary, and there's no
     /// reason for it to leave a mark on the user's saved arrangement.

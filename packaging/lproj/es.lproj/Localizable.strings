@@ -598,3 +598,5 @@
 "To the left" = "A la izquierda";
 "To the right" = "A la derecha";
 "Pick the side the TV actually stands on, so the pointer crosses over the right edge." = "Elige el lado donde está el TV de verdad, para que el puntero cruce por el borde correcto.";
+"Resolution is agreed with the TV when the stream starts — stop to change it." = "La resolución se acuerda con el TV al iniciar — detén para cambiarla.";
+"How sharp the picture is." = "Qué tan nítida se ve la imagen.";

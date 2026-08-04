@@ -106,7 +106,14 @@ final class CastModel {
     var mirroring = false
     var mirrorStarting = false
     var mirrorQuality: MirrorQuality = .p1080
-    var mirrorAudio = true
+    /// Applied the moment it changes, not on the next connection — a
+    /// checkbox that needs a reconnect to take effect reads as broken.
+    var mirrorAudio = true {
+        didSet {
+            fastMirror?.setSendAudio(mirrorAudio)
+            refreshMute()
+        }
+    }
     var mirrorError: String?
     /// Not probed at init: the TCC round-trip costs ~48 ms and every launch
     /// paid it, including the ones that never open this screen. The view asks
@@ -120,7 +127,9 @@ final class CastModel {
     var mirrorFastPath = true
     /// How long the TV holds frames before showing them. Lower is more
     /// responsive; too low and a jittery Wi-Fi network starts to stutter.
-    var mirrorDelayMs = 400
+    var mirrorDelayMs = 400 {
+        didSet { fastMirror?.setPlayoutDelay(ms: mirrorDelayMs) }
+    }
     /// Set when the fast path wasn't available and we fell back.
     var mirrorUsingFallback = false
     /// Whole screen, or one window parked on the TV while you keep working.
@@ -129,11 +138,15 @@ final class CastModel {
     /// audio rather than moving it. Duplicating means showing something to a
     /// room, so the room's speakers should have it and the laptop shouldn't.
     /// Extending means you're still working here, so it stays here.
-    var muteMacWhileCasting = true
+    var muteMacWhileCasting = true {
+        didSet { refreshMute() }
+    }
     /// Which side the second desktop lands on. Getting this wrong means the
     /// pointer leaves by the wrong edge, which feels broken even though
     /// nothing is.
-    var extendedSide: ExtendedSide = .right
+    var extendedSide: ExtendedSide = .right {
+        didSet { fastMirror?.setExtendedSide(extendedSide) }
+    }
     var availableWindows: [MirrorSource] = []
     var loadingWindows = false
     private var fastMirror: CastMirrorSession?
@@ -418,8 +431,19 @@ final class CastModel {
     /// Only mute when we're actually sending sound — muting a silent stream
     /// would just leave the user wondering where the audio went.
     private func applyMuteIfWanted() {
-        guard muteMacWhileCasting, mirrorAudio else { return }
-        macWasMuted = OutputMute.mute()
+        refreshMute()
+    }
+
+    /// Brings the Mac's own sound in line with the current settings, whenever
+    /// they change and whether or not a cast is running.
+    private func refreshMute() {
+        let shouldMute = mirroring && muteMacWhileCasting && mirrorAudio
+        if shouldMute, !macWasMuted {
+            macWasMuted = OutputMute.mute()
+        } else if !shouldMute, macWasMuted {
+            OutputMute.unmute()
+            macWasMuted = false
+        }
     }
 
     private var macWasMuted = false

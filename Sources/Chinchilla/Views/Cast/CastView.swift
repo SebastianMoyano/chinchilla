@@ -470,11 +470,10 @@ struct MirrorCard: View {
                     }
                     .pickerStyle(.segmented)
                     .fixedSize()
-                    Toggle("Include system audio", isOn: Binding(
-                        get: { model.mirrorAudio },
-                        set: { model.mirrorAudio = $0 }
-                    ))
-                    .toggleStyle(.checkbox)
+                    .disabled(model.mirroring)
+                    .help(model.mirroring
+                          ? String(localized: "Resolution is agreed with the TV when the stream starts — stop to change it.")
+                          : String(localized: "How sharp the picture is."))
                     Spacer()
                 }
 
