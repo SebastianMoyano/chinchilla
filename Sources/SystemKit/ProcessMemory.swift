@@ -49,7 +49,15 @@ public enum ProcessMemory {
             proc_name(pid, &nameBuffer, UInt32(nameBuffer.count))
             let raw = String(cString: nameBuffer)
             guard !raw.isEmpty else { continue }
-            let app = hostAppName(for: raw)
+
+            // The executable's path says who a process belongs to far more
+            // reliably than its name does: "AirPlayXPCHelper" looks like an
+            // app's helper and is macOS, and a helper buried inside
+            // Chrome.app names its host in the path whatever it calls itself.
+            var pathBuffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+            let pathLength = proc_pidpath(pid, &pathBuffer, UInt32(pathBuffer.count))
+            let path = pathLength > 0 ? String(cString: pathBuffer) : ""
+            let app = hostAppName(for: raw, path: path)
             guard !app.isEmpty else { continue }
 
             result.footprint[app, default: 0] += Int64(usage.ri_phys_footprint)
@@ -119,6 +127,28 @@ public enum ProcessMemory {
 
     /// System processes users can't (and shouldn't) act on are folded into
     /// one "macOS" bucket; helpers roll up to their host app.
+    /// Groups a process under the app a person would recognise, using the
+    /// executable path when we have one.
+    static func hostAppName(for processName: String, path: String) -> String {
+        if !path.isEmpty {
+            // Anything Apple ships is "macOS" — users can't act on it
+            // individually, and listing it by name is just noise.
+            for prefix in ["/System/", "/usr/libexec/", "/usr/sbin/", "/usr/bin/",
+                           "/Library/Apple/", "/sbin/", "/cores/"] where path.hasPrefix(prefix) {
+                return "macOS"
+            }
+            // The OUTERMOST bundle is the app you launched; helpers nest
+            // their own .app bundles inside it.
+            if let range = path.range(of: ".app/") {
+                let bundle = String(path[path.startIndex..<range.lowerBound])
+                if let name = bundle.split(separator: "/").last, !name.isEmpty {
+                    return String(name)
+                }
+            }
+        }
+        return hostAppName(for: processName)
+    }
+
     static func hostAppName(for processName: String) -> String {
         let systemNames: Set<String> = [
             "kernel_task", "WindowServer", "launchd", "logd", "mds", "mds_stores",
@@ -139,6 +169,14 @@ public enum ProcessMemory {
                 name = String(name.dropLast(suffix.count))
                 break
             }
+        }
+        // Run-together forms too — AirPlayXPCHelper, ControlCenterHelper,
+        // AppPredictionIntentsHelperService. Without this they survive as
+        // their own rows and read as mystery apps.
+        for suffix in ["HelperService", "XPCHelper", "Helper", "Service", "Agent"]
+        where name.hasSuffix(suffix) && name.count > suffix.count {
+            name = String(name.dropLast(suffix.count))
+            break
         }
         return name
     }

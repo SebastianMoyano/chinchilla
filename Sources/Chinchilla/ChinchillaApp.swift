@@ -126,7 +126,11 @@ struct ChinchillaApp: App {
             MenuBarView()
                 .environment(appState)
         } label: {
-            Image(systemName: "sparkles")
+            // The icon tells you which mode is on without opening anything.
+            Image(systemName: MenuBarStatus.current(
+                gaming: appState.gaming.isActive,
+                daily: appState.dailyBoost.isEnabled
+            ).symbol)
         }
         .menuBarExtraStyle(.window)
     }

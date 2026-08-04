@@ -8,14 +8,30 @@ struct MenuBarView: View {
     @State private var freeSpace: Int64 = 0
     @State private var pressure: MemoryPressureLevel = .unknown
 
+    private var status: MenuBarStatus {
+        .current(gaming: appState.gaming.isActive, daily: appState.dailyBoost.isEnabled)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.purple)
+                Image(systemName: status.symbol)
+                    .foregroundStyle(status.tint)
                 Text("Chinchilla")
                     .font(.headline)
                 Spacer()
+            }
+
+            // Spell out what the menu bar icon means — an icon that changes
+            // shape is only useful if you can find out what it changed to.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(status.label)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(status.tint)
+                Text(status.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {

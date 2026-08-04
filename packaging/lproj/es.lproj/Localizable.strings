@@ -479,3 +479,11 @@
 "Closing the lid isn't a restart — the Mac keeps running while it sleeps. A reboot clears leaked memory and often brings the snappiness back. Whenever suits you." = "Cerrar la tapa no es reiniciar — el Mac sigue encendido mientras duerme. Un reinicio libera memoria filtrada y suele devolver la agilidad. Cuando te acomode.";
 "Starting the mirror took too long. Try again." = "El espejo tardó demasiado en iniciar. Inténtalo de nuevo.";
 "%@ didn't respond in time." = "%@ no respondió a tiempo.";
+
+/* Icono de la barra según el modo activo (0.11.2) */
+"Gaming mode is on" = "Modo juego activo";
+"Daily mode is on" = "Modo diario activo";
+"No mode active" = "Sin modo activo";
+"Apps you chose are paused. Ending the session brings them all back." = "Las apps que elegiste están en pausa. Al terminar la sesión vuelven todas.";
+"Tabs sleep, the weekly clean is scheduled, and memory pressure is watched." = "Las pestañas duermen, la limpieza semanal está programada y se vigila la presión de memoria.";
+"Turn on Daily mode for everyday use, or start a Gaming session before you play." = "Activa el Modo diario para el uso de todos los días, o inicia una sesión de juego antes de jugar.";
