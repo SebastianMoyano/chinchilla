@@ -15,6 +15,7 @@ enum ChinchillaCLI {
         case history(json: Bool, limit: Int)
         case status(json: Bool)
         case orphans(json: Bool)
+        case devices(seconds: Int)
         case mirrorTest(host: String)
         case gameStreamTest(seconds: Int)
         case castStreamTest(host: String)
@@ -38,6 +39,8 @@ enum ChinchillaCLI {
             return .status(json: args.contains("--json"))
         case "orphans":
             return .orphans(json: args.contains("--json"))
+        case "devices":
+            return .devices(seconds: args.count > 1 ? (Int(args[1]) ?? 8) : 8)
         case "caststream-test":
             return .castStreamTest(host: args.count > 1 ? args[1] : "")
         case "caststream-mirror":
@@ -120,6 +123,8 @@ enum ChinchillaCLI {
                 printStatus(snapshot)
             }
             return 0
+        case .devices(let seconds):
+            return await DeviceDiagnostics.run(seconds: seconds)
         case .orphans(let json):
             let found = await OrphanFinder.scan()
             if json {

@@ -4,18 +4,9 @@ import Network
 public struct AirPlayDevice: Sendable, Hashable, Identifiable {
     public var id: String { name }
     public let name: String
-    /// From the TXT record's `model` field — "AppleTV14,1", "Samsung UE55…".
-    public let model: String?
 
-    public init(name: String, model: String?) {
+    public init(name: String) {
         self.name = name
-        self.model = model
-    }
-
-    /// Apple's own boxes versus a TV that merely speaks AirPlay 2. Worth
-    /// distinguishing only because the wording differs slightly.
-    public var isAppleDevice: Bool {
-        (model ?? "").hasPrefix("AppleTV") || (model ?? "").hasPrefix("Mac")
     }
 }
 
@@ -44,17 +35,17 @@ public final class AirPlayDiscovery: @unchecked Sendable {
             using: NWParameters(tls: nil, tcp: NWProtocolTCP.Options())
         )
         browser.browseResultsChangedHandler = { results, _ in
+            // This Mac advertises AirPlay too, and offering to cast a screen
+            // to itself is nonsense that also crowds out the real answer.
+            let ownName = Host.current().localizedName
             var devices: [AirPlayDevice] = []
             var seen = Set<String>()
             for result in results {
                 guard case .service(let name, _, _, _) = result.endpoint else { continue }
-                var model: String?
-                if case .bonjour(let txt) = result.metadata {
-                    model = txt["model"]
-                }
                 let friendly = Self.prettify(name)
+                guard friendly != ownName else { continue }
                 guard seen.insert(friendly).inserted else { continue }
-                devices.append(AirPlayDevice(name: friendly, model: model))
+                devices.append(AirPlayDevice(name: friendly))
             }
             onDevices(devices.sorted { $0.name < $1.name })
         }

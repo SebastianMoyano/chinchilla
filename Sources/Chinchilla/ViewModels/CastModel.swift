@@ -68,10 +68,9 @@ struct CastTarget: Identifiable, Hashable {
         case .googlecast: "Files and screen mirroring · under half a second"
         case .fcast: "Files and screen mirroring · 2–3 seconds"
         case .dlna: "Files only — this one can't mirror your screen"
-        case .airplay(let device):
-            device.isAppleDevice
-                ? "Your Mac talks to this one directly — and does it better than we can"
-                : "This TV speaks AirPlay; macOS drives it natively"
+        // No model comes back from the browse — Bonjour hands over a name and
+        // nothing else here — so one wording for all of them.
+        case .airplay: "AirPlay: your Mac drives this one natively, and better than we could"
         }
     }
 
