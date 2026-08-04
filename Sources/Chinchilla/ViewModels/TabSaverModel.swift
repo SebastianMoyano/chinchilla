@@ -31,20 +31,34 @@ final class TabSaverModel {
         }
     }
 
-    /// Auto = judge the machine honestly: ≤8 GB of RAM or non-normal memory
-    /// pressure → light; otherwise balanced. Re-evaluated on refresh and by
-    /// the Everyday-mode watchdog, so a Mac having a bad day gets relief.
-    static func autoLevel() -> BrowserTuner.BrowserPerfLevel {
-        var size: UInt64 = 0
-        var length = MemoryLayout<UInt64>.size
-        sysctlbyname("hw.memsize", &size, &length, nil, 0)
-        if size <= 8 << 30 { return .light }
-        return SystemSampler.memoryPressure() == .normal ? .balanced : .light
+    /// Auto = judge how the Mac *feels*, not how much RAM it was sold with.
+    ///
+    /// The old rule sent every 8 GB machine to `.light` permanently and asked
+    /// a single flapping sysctl for everything above that. Swap is the signal
+    /// that matches the complaint: once macOS is paging, every click waits on
+    /// the disk. See `BrowserPressurePolicy` — it also carries the hysteresis
+    /// that stops a machine on the boundary from flipping every reading.
+    static func autoLevel(current: BrowserTuner.BrowserPerfLevel? = nil) -> BrowserTuner.BrowserPerfLevel {
+        let memory = SystemSampler.memoryUsage()
+        let reading = BrowserPressurePolicy.Reading(
+            totalBytes: memory.total,
+            usedBytes: memory.used,
+            swapBytes: SystemSampler.swapUsed(),
+            pressure: SystemSampler.memoryPressure()
+        )
+        let decided = BrowserPressurePolicy.level(
+            for: reading,
+            current: current.flatMap { BrowserPressurePolicy.Level(rawValue: $0.rawValue) }
+        )
+        return BrowserTuner.BrowserPerfLevel(rawValue: decided.rawValue) ?? .balanced
     }
 
     var resolvedLevel: BrowserTuner.BrowserPerfLevel {
         switch perfMode {
-        case .auto: Self.autoLevel()
+        case .auto: Self.autoLevel(
+            current: UserDefaults.standard.string(forKey: Self.lastAppliedKey)
+                .flatMap(BrowserTuner.BrowserPerfLevel.init(rawValue:))
+        )
         case .light: .light
         case .balanced: .balanced
         case .full: .full
@@ -87,8 +101,11 @@ final class TabSaverModel {
     /// Everyday-mode watchdog every few minutes.
     func reevaluateAutoIfNeeded() {
         guard anySaverOn, perfMode == .auto else { return }
-        let level = Self.autoLevel()
-        guard level.rawValue != UserDefaults.standard.string(forKey: Self.lastAppliedKey) else { return }
+        let applied = UserDefaults.standard.string(forKey: Self.lastAppliedKey)
+        let level = Self.autoLevel(
+            current: applied.flatMap(BrowserTuner.BrowserPerfLevel.init(rawValue:))
+        )
+        guard level.rawValue != applied else { return }
         applyCurrentLevel()
     }
 

@@ -65,6 +65,8 @@ public final class SystemSampler {
         return Double(busy) / Double(total)
     }
 
+    func sampleMemoryPublic(_ snapshot: inout SystemSnapshot) { sampleMemory(&snapshot) }
+
     private func sampleMemory(_ snapshot: inout SystemSnapshot) {
         var size: UInt64 = 0
         var length = MemoryLayout<UInt64>.size
@@ -85,6 +87,14 @@ public final class SystemSampler {
         let used = Int64(vmInfo.active_count) + Int64(vmInfo.wire_count)
             + Int64(vmInfo.compressor_page_count)
         snapshot.memoryUsed = used * pageSize
+    }
+
+    /// Total and used memory, without needing a stateful sampler — the CPU
+    /// figures are the only part of `sample()` that needs one.
+    public static func memoryUsage() -> (total: Int64, used: Int64) {
+        var snapshot = SystemSnapshot()
+        SystemSampler().sampleMemoryPublic(&snapshot)
+        return (snapshot.memoryTotal, snapshot.memoryUsed)
     }
 
     public static func memoryPressure() -> MemoryPressureLevel {
