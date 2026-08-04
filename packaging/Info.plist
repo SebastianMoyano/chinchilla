@@ -35,12 +35,14 @@
 	<array>
 		<string>_fcast._tcp</string>
 		<string>_googlecast._tcp</string>
+		<string>_airplay._tcp</string>
+		<string>_raop._tcp</string>
 	</array>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Sebastián</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Chinchilla finds FCast receivers (TVs) on your network to cast your screen and media.</string>
+	<string>Chinchilla looks for TVs and speakers on your network — Chromecast, AirPlay, DLNA and FCast — so it can send files and mirror your screen to them.</string>
 </dict>
 </plist>
