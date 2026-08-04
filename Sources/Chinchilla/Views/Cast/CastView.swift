@@ -214,6 +214,11 @@ struct CastView: View {
                         }
                         .font(.caption2)
                         .foregroundStyle(target.capabilityTint)
+                        if let note = target.airplayNote {
+                            Text(note)
+                                .font(.caption2)
+                                .foregroundStyle(Theme.primary)
+                        }
                         if let subtitle = target.subtitle {
                             Text(verbatim: subtitle)
                                 .font(.caption2)

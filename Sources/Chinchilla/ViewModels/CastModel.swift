@@ -22,6 +22,9 @@ struct CastTarget: Identifiable, Hashable {
     let id: String
     let name: String
     let kind: Kind
+    /// The same television often answers on two protocols. One row per
+    /// physical set, with the alternative noted rather than duplicated.
+    var alsoAirPlay = false
 
     var protocolLabel: LocalizedStringKey {
         switch kind {
@@ -72,6 +75,14 @@ struct CastTarget: Identifiable, Hashable {
         // nothing else here — so one wording for all of them.
         case .airplay: "AirPlay: your Mac drives this one natively, and better than we could"
         }
+    }
+
+    /// What to add when the same set also speaks AirPlay: mirroring through
+    /// macOS beats anything this app can do, and on a DLNA-only set it's the
+    /// difference between "files only" and "actually mirrors".
+    var airplayNote: LocalizedStringKey? {
+        guard alsoAirPlay, !handledByMacOS else { return nil }
+        return "Also on AirPlay — for mirroring, macOS does it better"
     }
 
     var capabilityTint: Color {
@@ -497,6 +508,28 @@ final class CastModel {
         }
     }
 
+    /// Ranks by what this app can do with each protocol; the rule itself
+    /// lives in CastKit, where it can be tested.
+    static func merged(_ targets: [CastTarget]) -> [CastTarget] {
+        DeviceMerge.merge(
+            targets,
+            name: \.name,
+            rank: { target in
+                switch target.kind {
+                case .googlecast: 0     // files and sub-second mirroring
+                case .fcast: 1          // files and mirroring
+                case .dlna: 2           // files only
+                case .airplay: 3        // nothing we can drive
+                }
+            },
+            isAirPlay: { if case .airplay = $0.kind { true } else { false } }
+        ).map { merged in
+            var target = merged.item
+            target.alsoAirPlay = merged.alsoAirPlay
+            return target
+        }
+    }
+
     // MARK: Discovery (both protocols at once)
 
     func startDiscovery() {
@@ -562,7 +595,7 @@ final class CastModel {
         // ForEach — which is exactly what spun the view graph before.
         var seen = Set<String>()
         list.removeAll { !seen.insert($0.id).inserted }
-        targets = list
+        targets = Self.merged(list)
         if !list.isEmpty { searchedAndEmpty = false }
     }
 

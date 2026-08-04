@@ -37,7 +37,7 @@ public final class FCastDiscovery: @unchecked Sendable {
         onDevices: @escaping @Sendable ([FCastDevice]) -> Void,
         onState: @escaping @Sendable (DiscoveryState) -> Void
     ) {
-        stop()
+        guard browser == nil else { return }
         let browser = NWBrowser(
             for: .bonjour(type: "_fcast._tcp", domain: nil),
             using: NWParameters(tls: nil, tcp: NWProtocolTCP.Options())
@@ -81,7 +81,11 @@ public final class GoogleCastDiscovery: @unchecked Sendable {
     public init() {}
 
     public func start(onDevices: @escaping @Sendable ([GoogleCastDevice]) -> Void) {
-        stop()
+        // Bonjour browsing is continuous: it keeps reporting as devices come
+        // and go. Restarting it throws away everything already found and
+        // makes the list empty out — which is exactly what "Refresh" looked
+        // like it was doing wrong.
+        guard browser == nil else { return }
         let browser = NWBrowser(
             for: .bonjour(type: "_googlecast._tcp", domain: nil),
             using: NWParameters(tls: nil, tcp: NWProtocolTCP.Options())

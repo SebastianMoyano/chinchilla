@@ -29,7 +29,11 @@ public final class AirPlayDiscovery: @unchecked Sendable {
     public init() {}
 
     public func start(onDevices: @escaping @Sendable ([AirPlayDevice]) -> Void) {
-        stop()
+        // Bonjour browsing is continuous: it keeps reporting as devices come
+        // and go. Restarting it throws away everything already found and
+        // makes the list empty out — which is exactly what "Refresh" looked
+        // like it was doing wrong.
+        guard browser == nil else { return }
         let browser = NWBrowser(
             for: .bonjour(type: "_airplay._tcp", domain: nil),
             using: NWParameters(tls: nil, tcp: NWProtocolTCP.Options())
