@@ -77,7 +77,7 @@ private struct AppRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
+            Image(nsImage: model.icon(for: app.path))
                 .resizable()
                 .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 1) {
@@ -114,7 +114,9 @@ private struct LeftoversSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
+                // The model's cache, like AppRow — asking IconServices here
+                // was a synchronous lookup on every render of the sheet.
+                Image(nsImage: model.icon(for: app.path))
                     .resizable()
                     .frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 2) {

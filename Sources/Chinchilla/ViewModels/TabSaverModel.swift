@@ -53,6 +53,11 @@ final class TabSaverModel {
         return BrowserTuner.BrowserPerfLevel(rawValue: decided.rawValue) ?? .balanced
     }
 
+    /// The same answer as `resolvedLevel`, but sampled at refresh time.
+    /// The Dashboard prints it in a sentence, and reading `resolvedLevel`
+    /// there meant three sysctls on every render of that card.
+    private(set) var displayLevel: BrowserTuner.BrowserPerfLevel = .balanced
+
     var resolvedLevel: BrowserTuner.BrowserPerfLevel {
         switch perfMode {
         case .auto: Self.autoLevel(
@@ -127,6 +132,7 @@ final class TabSaverModel {
                     memorySaverOn: BrowserTuner.isMemorySaverManaged($0)
                 )
             }
+        displayLevel = resolvedLevel
         // Auto stays live even without the Everyday-mode watchdog: every
         // Dashboard visit re-judges the machine. The lastApplied guard makes
         // this a no-op unless the answer actually changed (no recursion:

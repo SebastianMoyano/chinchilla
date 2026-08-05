@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import DiskScanKit
 
 /// The host's self-signed certificate and key — GameStream pairing is built
 /// around them. macOS has no API to mint an X.509, so we drive the bundled
@@ -75,11 +76,24 @@ public struct HostIdentity: @unchecked Sendable {
             let pipe = Pipe()
             process.standardError = pipe
             process.standardOutput = pipe
+            // Drain while it runs, not after. A pipe holds about 64 KB; once
+            // full, the child blocks on write and we block in waitUntilExit —
+            // and neither ever moves again. openssl is quiet on success, so
+            // this only ever bit on a verbose failure, which is precisely when
+            // hanging is least acceptable.
+            let collected = Locked(Data())
+            pipe.fileHandleForReading.readabilityHandler = { handle in
+                let chunk = handle.availableData
+                guard !chunk.isEmpty else { return }
+                collected.withLock { $0.append(chunk) }
+            }
             try process.run()
             process.waitUntilExit()
+            pipe.fileHandleForReading.readabilityHandler = nil
+            collected.withLock { $0.append(pipe.fileHandleForReading.availableData) }
             guard process.terminationStatus == 0 else {
                 let output = String(
-                    data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
+                    data: collected.withLock { $0 }, encoding: .utf8
                 ) ?? ""
                 throw HostIdentityError.message("openssl failed: \(output)")
             }

@@ -8,6 +8,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     case deepClean
     case uninstaller
     case diskAnalyzer
+    case memory
     case gaming
     case startup
     case health
@@ -22,6 +23,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .deepClean: "Deep Clean"
         case .uninstaller: "Uninstaller"
         case .diskAnalyzer: "Disk Space"
+        case .memory: "Memory"
         case .gaming: "Gaming Mode"
         case .startup: "Startup"
         case .health: "Health"
@@ -36,6 +38,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .deepClean: "sparkles"
         case .uninstaller: "trash.square"
         case .diskAnalyzer: "chart.pie.fill"
+        case .memory: "memorychip"
         case .gaming: "gamecontroller.fill"
         case .startup: "power"
         case .health: "stethoscope"
@@ -50,6 +53,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .deepClean: .purple
         case .uninstaller: .red
         case .diskAnalyzer: .orange
+        case .memory: .teal
         case .gaming: .green
         case .startup: .yellow
         case .health: .mint
@@ -75,6 +79,8 @@ final class AppState {
     let updates = UpdateModel()
     let snapshots = SnapshotModel()
     let memory = MemoryModel()
+    let memoryHistory = MemoryHistoryModel()
+    let everydayPlan = EverydayPlanModel()
     let dailyBoost = DailyBoostModel()
     let tabGuard = TabGuardModel()
     let health = HealthModel()
@@ -82,14 +88,31 @@ final class AppState {
 
     let stalls = StallDetector()
 
+    /// The live app state, for the few places outside SwiftUI that need it —
+    /// notification replies arrive at the app delegate, which has no
+    /// environment to read from.
+    static weak var current: AppState?
+
     init() {
+        Self.current = self
         dailyBoost.appState = self
         dailyBoost.startIfEnabled()
+        deepClean.onReportChanged = { [weak self] in self?.refreshSmartTotals() }
         // Never leave apps frozen by a crashed gaming session.
         gaming.resumeOrphanedPauses()
         // Same idea for sound: a crash mid-cast must not leave a silent Mac.
         OutputMute.restoreIfInterrupted()
         stalls.start()
+        // Starts with the app, not with the screen: a record only kept while
+        // you're looking at it wouldn't be a record.
+        memoryHistory.start()
+        everydayPlan.appState = self
+        // The plan is rebuilt from each new reading, so it always reflects
+        // what this Mac is doing rather than what it was doing at launch.
+        memoryHistory.onSample = { [weak self] samples in
+            guard let self else { return }
+            everydayPlan.refresh(samples: samples)
+        }
     }
 
     /// What the app was doing, for the stall log. Anything that puts a
@@ -124,21 +147,39 @@ final class AppState {
     var smartScanRunning = false
     var smartScanDone = false
 
-    /// Bytes of `safe` clean items found by the last deep-clean scan.
-    var smartCleanBytes: Int64 {
-        deepClean.report.items.filter { $0.safety == .safe }.reduce(0) { $0 + $1.size }
-    }
-
-    var smartDockerBytes: Int64 {
-        devTools.dockerUsage.reduce(0) { $0 + $1.reclaimableBytes }
-    }
-
-    var smartArtifactBytes: Int64 {
-        devTools.artifacts.reduce(0) { $0 + $1.size }
-    }
+    /// The Smart Scan card's numbers, worked out when a scan finishes rather
+    /// than while drawing. Every one of these used to be a computed property
+    /// that walked the full item list — and `smartCleanableItems` also
+    /// enumerated every running process, through `NSWorkspace`, five times per
+    /// render of that one card.
+    private(set) var smartCleanBytes: Int64 = 0
+    private(set) var smartDockerBytes: Int64 = 0
+    private(set) var smartArtifactBytes: Int64 = 0
+    private(set) var smartCleanableItems: [CleanItem] = []
+    private(set) var smartCleanableBytes: Int64 = 0
 
     var smartTotalBytes: Int64 {
         smartCleanBytes + smartDockerBytes + smartArtifactBytes
+    }
+
+    /// Safe junk that can't go right now because its app is open. Naming it
+    /// is the difference between "the button is broken" and "close Chrome".
+    var smartBlockedByAppsBytes: Int64 {
+        max(0, smartCleanBytes - smartCleanableBytes)
+    }
+
+    /// Call whenever a scan or clean changes what's on offer. Cheap to call;
+    /// it is the only place that pays for the process enumeration.
+    func refreshSmartTotals() {
+        let safe = deepClean.report.items.filter { $0.safety == .safe }
+        smartCleanBytes = safe.reduce(0) { $0 + $1.size }
+        smartDockerBytes = devTools.dockerUsage.reduce(0) { $0 + $1.reclaimableBytes }
+        smartArtifactBytes = devTools.artifacts.reduce(0) { $0 + $1.size }
+        // Docker images and build artefacts are deliberately not cleanable
+        // from here: those need a look before they go, and each has its own
+        // screen.
+        smartCleanableItems = RunningAppGuard.filterOutConflicts(safe)
+        smartCleanableBytes = smartCleanableItems.reduce(0) { $0 + $1.size }
     }
 
     // MARK: Smart Clean — the step the scan used to stop short of
@@ -151,25 +192,6 @@ final class AppState {
     /// permissions problem the user could act on.
     var smartCleanFailures: [CleanFailure] = []
 
-    /// Everything the scan found that is safe to remove and whose app isn't
-    /// running. Docker images and build artefacts are deliberately not here:
-    /// those need a look before they go, and each has its own screen.
-    var smartCleanableItems: [CleanItem] {
-        RunningAppGuard.filterOutConflicts(
-            deepClean.report.items.filter { $0.safety == .safe }
-        )
-    }
-
-    var smartCleanableBytes: Int64 {
-        smartCleanableItems.reduce(0) { $0 + $1.size }
-    }
-
-    /// Safe junk that can't go right now because its app is open. Naming it
-    /// is the difference between "the button is broken" and "close Chrome".
-    var smartBlockedByAppsBytes: Int64 {
-        max(0, smartCleanBytes - smartCleanableBytes)
-    }
-
     /// Runs the clean the scan just justified. Safe categories only, and
     /// straight to the Trash — the same work the weekly schedule does
     /// unattended, so doing it from a button that asks first is the more
@@ -178,6 +200,9 @@ final class AppState {
         // Deep Clean can be mid-clean over overlapping items; two passes make
         // the loser report files the winner already removed.
         guard !smartCleaning, deepClean.phase != .cleaning else { return }
+        // Apps may have opened since the scan; the guard is enforced at clean
+        // time, not just at scan time.
+        refreshSmartTotals()
         let items = smartCleanableItems
         guard !items.isEmpty else { return }
         smartCleaning = true
@@ -215,12 +240,20 @@ final class AppState {
         devTools.scanArtifacts()
         Task {
             // The three sweeps report through their own models; wait for all.
+            // The wait has its own limit rather than trusting theirs: this
+            // loop wakes the main actor five times a second, and one model
+            // that never clears its phase turns that into a permanent
+            // heartbeat nobody can see.
+            let giveUpAt = ContinuousClock.now + .seconds(200)
             while deepClean.phase == .scanning
                 || devTools.dockerPhase == .loading
                 || devTools.artifactsScanning {
+                guard ContinuousClock.now < giveUpAt else { break }
                 try? await Task.sleep(for: .milliseconds(200))
             }
             smartScanRunning = false
+            // Docker and artefacts finish outside the deep-clean callback.
+            refreshSmartTotals()
             withAnimation(.spring) { smartScanDone = true }
         }
     }

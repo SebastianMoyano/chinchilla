@@ -49,6 +49,45 @@ import Testing
     #expect(ProcessMemory.hostAppName(for: "Spotify Helper", path: "") == "Spotify")
 }
 
+/// Self-updating command-line tools install as `.../name/versions/2.1.220`,
+/// with no bundle anywhere. Taking the file name put a row called "2.1.220"
+/// holding 2 GB at the top of the memory list — true, and no use to anyone.
+@Test func aVersionNumberIsNeverAnAppName() {
+    #expect(ProcessMemory.hostAppName(
+        for: "2.1.220", path: "/Users/admin/.local/share/claude/versions/2.1.220"
+    ) == "claude")
+    // Two versions of the same tool collapse onto one row.
+    #expect(ProcessMemory.hostAppName(
+        for: "2.1.221", path: "/Users/admin/.local/share/claude/versions/2.1.221"
+    ) == "claude")
+    // Homebrew's Cellar layout.
+    #expect(ProcessMemory.hostAppName(
+        for: "3.14.6", path: "/opt/homebrew/Cellar/python@3.14/3.14.6"
+    ) == "python@3.14")
+    // A `v` prefix is still a version.
+    #expect(ProcessMemory.hostAppName(
+        for: "v18.20.4", path: "/Users/admin/.nvm/versions/node/v18.20.4"
+    ) == "node")
+}
+
+@Test func versionDetectionDoesNotSwallowRealNames() {
+    #expect(ProcessMemory.looksLikeVersion("2.1.220"))
+    #expect(ProcessMemory.looksLikeVersion("v3.2"))
+    #expect(ProcessMemory.looksLikeVersion("18") == false)      // no dot
+    #expect(ProcessMemory.looksLikeVersion("node") == false)
+    #expect(ProcessMemory.looksLikeVersion("com.apple.WebKit") == false)
+    #expect(ProcessMemory.looksLikeVersion("") == false)
+    // A plain binary keeps its own name.
+    #expect(ProcessMemory.hostAppName(for: "node", path: "/opt/homebrew/bin/node") == "node")
+}
+
+@Test func aPathOfNothingButStructureGivesUpRatherThanGuess() {
+    // Every parent is structural, so there is no better answer than the
+    // fallback — and inventing one would be worse.
+    #expect(ProcessMemory.nameFromVersionedPath("/usr/local/bin/1.2.3") == nil)
+    #expect(ProcessMemory.nameFromVersionedPath("/opt/homebrew/bin/node") == nil)
+}
+
 @Test func runTogetherHelperNamesAreFolded() {
     #expect(ProcessMemory.hostAppName(for: "AirPlayXPCHelper") == "AirPlay")
     #expect(ProcessMemory.hostAppName(for: "ControlCenterHelper") == "ControlCenter")

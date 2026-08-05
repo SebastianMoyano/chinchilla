@@ -3,6 +3,7 @@ import AppKit
 import UserNotifications
 import CleanCore
 import SystemKit
+import CastKit
 
 /// Entry-point dispatcher: CLI subcommands run without ever spinning up the
 /// GUI; everything else launches the SwiftUI app.
@@ -24,7 +25,7 @@ struct Main {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     static let isScheduledRun =
         CommandLine.arguments.contains("--scheduled-clean")
         || ProcessInfo.processInfo.environment["CHINCHILLA_SCHEDULED"] == "1"
@@ -41,6 +42,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         UserDefaults.standard.register(defaults: [Self.keepInMenuBarKey: true])
+        // Answering "close it" from the notification is the point: the whole
+        // exchange should happen without the user going to find a screen.
+        UNUserNotificationCenter.current().delegate = self
+        MemoryNotifier.registerCategory()
         if Self.isLoginLaunch {
             NSApp.setActivationPolicy(.accessory)
             return
@@ -55,13 +60,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         presentMainWindow()
     }
 
+    /// The answer to "Close X?" arrives here when it was given from the
+    /// notification rather than from the window.
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        // The two values we need are plain strings; pulling them out here
+        // keeps the non-Sendable notification objects off the hop.
+        let target = response.notification.request.content
+            .userInfo[MemoryNotifier.targetKey] as? String
+        let action = response.actionIdentifier
+        let finish = Unchecked(completionHandler)
+        Task { @MainActor in
+            AppDelegate.handleMemoryReply(target: target, action: action)
+            finish.value()
+        }
+    }
+
+    @MainActor
+    static func handleMemoryReply(target: String?, action: String) {
+        guard let target,
+              let everyday = AppState.current?.everydayPlan,
+              let pending = everyday.pendingQuit ?? everyday.plan?.actions
+                  .first(where: { $0.kind == .quitApp && $0.target == target })
+        else { return }
+
+        switch action {
+        case MemoryNotifier.closeAction:
+            everyday.confirmQuit(pending)
+        case MemoryNotifier.neverAction:
+            everyday.refuseQuit(pending)
+        default:
+            // Tapping the notification body opens the screen that explains it,
+            // rather than doing anything on the user's behalf.
+            AppState.current?.selection = .memory
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+            (NSApp.delegate as? AppDelegate)?.presentMainWindow()
+        }
+    }
+
     /// SwiftUI creates the `Window` scene's NSWindow lazily, and macOS can
     /// restore a "no windows" state — then the app looks like it never
     /// opened. `defaultLaunchBehavior` covers this but is macOS 15+, so we
     /// bring the window up ourselves, retrying briefly because the scene
     /// doesn't exist yet when the delegate is called.
     @MainActor
-    private func presentMainWindow(attempt: Int = 0) {
+    func presentMainWindow(attempt: Int = 0) {
         if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
             window.makeKeyAndOrderFront(nil)
             return

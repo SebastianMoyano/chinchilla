@@ -24,7 +24,11 @@ struct CastView: View {
             .padding(24)
         }
         .navigationTitle("Cast")
-        .onAppear { model.startDiscovery() }
+        // Paired: discovery runs while someone can see the list, and the
+        // browsers come down when nobody can. The rate-limited variant keeps
+        // a quick tab-switch from re-sweeping SSDP every time.
+        .onAppear { model.discoveryViewAppeared() }
+        .onDisappear { model.discoveryViewDisappeared() }
     }
 
     private var localNetworkBanner: some View {

@@ -71,6 +71,40 @@ public enum DockerClient {
         }
     }
 
+    /// How many containers are running right now. `nil` when the daemon can't
+    /// be reached — which is not the same as zero, and must not be treated as
+    /// permission to stop anything.
+    public static func runningContainerCount() async -> Int? {
+        guard let docker = binaryPath() else { return nil }
+        guard let output = try? await ShellRunner.run(
+            docker, ["ps", "--quiet"], timeout: .seconds(5)
+        ) else { return nil }
+        return output.split(separator: "\n").filter { !$0.isEmpty }.count
+    }
+
+    /// Stops Docker Desktop's virtual machine.
+    ///
+    /// This is the one reversible action on a developer's Mac that gives back
+    /// real memory: the VM holds its reservation whether or not a container is
+    /// running, and `docker` starts it again by itself the next time you use
+    /// it. Nothing is destroyed — images, volumes and stopped containers are
+    /// all still there afterwards.
+    public static func stopDesktop() async throws {
+        guard let docker = binaryPath() else {
+            throw ShellError(exitCode: -1, stderr: "docker not installed")
+        }
+        // Docker Desktop 4.37+ ships this subcommand; older versions don't,
+        // and quitting the app does the same thing without a shell escape.
+        if (try? await ShellRunner.run(
+            docker, ["desktop", "stop"], timeout: .seconds(60)
+        )) != nil {
+            return
+        }
+        _ = try await ShellRunner.run(
+            "/usr/bin/osascript", ["-e", "quit app \"Docker Desktop\""], timeout: .seconds(30)
+        )
+    }
+
     /// Runs a prune and returns docker's own report (includes reclaimed space).
     public static func prune(_ action: DockerPruneAction) async throws -> String {
         guard let docker = binaryPath() else {

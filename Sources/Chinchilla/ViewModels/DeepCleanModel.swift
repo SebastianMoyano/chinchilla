@@ -17,28 +17,71 @@ final class DeepCleanModel {
 
     var phase: Phase = .idle
     var report = ScanReport()
-    var selected: Set<String> = []
+    var selected: Set<String> = [] {
+        // Every checkbox toggle re-renders every section header; keeping the
+        // per-category selected counts here makes that O(selected) once per
+        // click instead of a contains-per-item reduce in each header's body.
+        didSet { recomputeSelectedCounts() }
+    }
     /// ON = preview only. The user must flip it to actually delete.
     var dryRun = true
     var outcome: CleanOutcome?
     /// Bundle IDs of running apps that conflict with some items (browsers).
     var runningConflicts: Set<String> = []
     var hasFullDiskAccess = true
+    /// Fired when a scan replaces the report, so whoever derives numbers from
+    /// it can do that work once instead of per render.
+    var onReportChanged: (@MainActor () -> Void)?
 
     private static let rulesByID = Dictionary(
         uniqueKeysWithValues: RuleCatalog.rules.map { ($0.id, $0) }
     )
 
     var selectedItems: [CleanItem] {
-        report.items.filter { selected.contains($0.id) }
+        report.items(ids: selected)
     }
 
+    /// Read on every render of the Deep Clean screen, so it doesn't walk the
+    /// item list — it adds up the selection, which is what it's actually about.
     var selectedBytes: Int64 {
-        selectedItems.reduce(0) { $0 + $1.size }
+        report.bytes(of: selected)
     }
 
     var categories: [CleanCategory] {
-        CleanCategory.allCases.filter { !report.items(in: $0).isEmpty }
+        report.populatedCategories
+    }
+
+    // MARK: Per-category numbers, derived once instead of per render
+
+    /// The report is immutable between scans, so its category totals are
+    /// computed when it changes — not summed by every section on every render.
+    private var categoryTotalBytes: [CleanCategory: Int64] = [:]
+    private var selectedCountsByCategory: [CleanCategory: Int] = [:]
+
+    func totalBytes(in category: CleanCategory) -> Int64 {
+        categoryTotalBytes[category] ?? 0
+    }
+
+    func selectedCount(in category: CleanCategory) -> Int {
+        selectedCountsByCategory[category] ?? 0
+    }
+
+    private func rebuildCategoryTotals() {
+        var totals: [CleanCategory: Int64] = [:]
+        for item in report.items {
+            totals[item.category, default: 0] += item.size
+        }
+        categoryTotalBytes = totals
+    }
+
+    private func recomputeSelectedCounts() {
+        var counts: [CleanCategory: Int] = [:]
+        for id in selected {
+            if let item = report.item(id: id) {
+                counts[item.category, default: 0] += 1
+            }
+        }
+        selectedCountsByCategory = counts
     }
 
     func itemHasConflict(_ item: CleanItem) -> Bool {
@@ -54,11 +97,26 @@ final class DeepCleanModel {
         phase = .scanning
         hasFullDiskAccess = Permissions.hasFullDiskAccess()
         outcome = nil
+        // This was the one busy phase in the app without a deadline, and it
+        // drives an indeterminate spinner: if the scan wedges (a TCC prompt
+        // nobody answered, a dead network volume), the window re-lays out at
+        // display rate forever and the screen stays unusable until relaunch.
+        BusyDeadline.arm("DeepClean.scanning", .seconds(180)) { [weak self] in
+            self?.phase == .scanning
+        } clear: { [weak self] in
+            guard let self, phase == .scanning else { return }
+            phase = report.items.isEmpty ? .idle : .review
+        }
         Task {
             let fda = hasFullDiskAccess
             let result = await CleanScanner.scan(hasFullDiskAccess: fda)
             report = result
+            rebuildCategoryTotals()
             refreshRunningConflicts()
+            // The dashboard's totals are derived from this report; it can't
+            // recompute them while drawing without enumerating every running
+            // process on every frame.
+            onReportChanged?()
             // Pre-check only `safe` items whose app isn't running.
             selected = Set(
                 result.items
@@ -94,6 +152,12 @@ final class DeepCleanModel {
     func clean() {
         guard phase == .review, !selectedItems.isEmpty else { return }
         phase = .cleaning
+        BusyDeadline.arm("DeepClean.cleaning", .seconds(600)) { [weak self] in
+            self?.phase == .cleaning
+        } clear: { [weak self] in
+            guard let self, phase == .cleaning else { return }
+            phase = .review
+        }
         // Enforce the running-app guard at clean time, not just at
         // pre-selection — the user may have launched Chrome after scanning.
         let items = RunningAppGuard.filterOutConflicts(selectedItems)
@@ -109,6 +173,7 @@ final class DeepCleanModel {
     func backToIdle() {
         phase = .idle
         report = ScanReport()
+        rebuildCategoryTotals()
         selected = []
         outcome = nil
     }

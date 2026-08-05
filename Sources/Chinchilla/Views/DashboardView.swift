@@ -484,7 +484,7 @@ struct TabSaverCard: View {
                                 .help("Light: maximum tab savings, aggressive energy saver, no page preloading — for Macs that struggle. Balanced: sensible middle. Full speed: keeps preloading and skips the energy saver — for Macs with headroom. Auto picks from your RAM and live memory pressure, and adapts while Everyday mode runs.")
                             }
                             if model.perfMode == .auto {
-                                Text("Auto chose \"\(levelName(model.resolvedLevel))\" for this Mac (RAM + current memory pressure). It adapts over time with Everyday mode.")
+                                Text("Auto chose \"\(levelName(model.displayLevel))\" for this Mac (RAM + current memory pressure). It adapts over time with Everyday mode.")
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
                             }

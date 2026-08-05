@@ -40,6 +40,17 @@ public enum DiskScanner {
         options: WalkOptions,
         emitProgress: @escaping @Sendable (Int64, String) -> Void
     ) async -> ScanResult {
+        await withCancelFlag { cancel in
+            await runScan(root: root, options: options, cancel: cancel, emitProgress: emitProgress)
+        }
+    }
+
+    private static func runScan(
+        root: String,
+        options: WalkOptions,
+        cancel: CancelFlag,
+        emitProgress: @escaping @Sendable (Int64, String) -> Void
+    ) async -> ScanResult {
         let fm = FileManager.default
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: root, isDirectory: &isDir), isDir.boolValue else {
@@ -52,7 +63,11 @@ public enum DiskScanner {
             (0, ContinuousClock.now)
         )
         var opts = options
-        opts.isCancelled = { Task.isCancelled }
+        // Not `Task.isCancelled`: the walkers run inside `Blocking.run`, on a
+        // GCD thread with no task attached, where that always reads false —
+        // so cancelled scans ran to completion, invisibly, on top of the new
+        // one the user had just started.
+        opts.isCancelled = cancel.probe
         opts.hardlinks = HardlinkRegistry()  // shared across parallel walkers
         opts.onProgress = { delta, path in
             let emit: Int64? = progressState.withLock { state in
@@ -106,7 +121,7 @@ public enum DiskScanner {
             }
         }
 
-        if Task.isCancelled {
+        if Task.isCancelled || cancel.isCancelled {
             return .failure("cancelled")
         }
 

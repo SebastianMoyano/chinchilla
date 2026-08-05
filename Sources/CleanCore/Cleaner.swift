@@ -1,5 +1,6 @@
 import Foundation
 import DiskScanKit
+import SystemKit
 
 public struct CleanFailure: Error, Sendable, Identifiable {
     public var id: String { path }
@@ -127,9 +128,9 @@ public enum Cleaner {
 
     /// Most recent real clean, for the dashboard.
     public static func lastClean() -> LastClean? {
-        guard let data = try? Data(contentsOf: auditLogURL),
-              let text = String(data: data, encoding: .utf8) else { return nil }
-        guard let lastLine = text.split(separator: "\n").last(where: { !$0.isEmpty }) else { return nil }
+        // The dashboard asks on every refresh, and it only ever wants the last
+        // line — no reason for that to cost more each month.
+        guard let lastLine = RollingLog.tail(auditLogURL, lines: 1).first else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let entry = try? decoder.decode(AuditEntry.self, from: Data(lastLine.utf8)) else { return nil }
@@ -157,19 +158,7 @@ public enum Cleaner {
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard var data = try? encoder.encode(entry) else { return }
-        data.append(0x0A)
-        let url = auditLogURL
-        let fm = FileManager.default
-        try? fm.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
-        )
-        if let handle = try? FileHandle(forWritingTo: url) {
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: data)
-        } else {
-            try? data.write(to: url)
-        }
+        guard let data = try? encoder.encode(entry) else { return }
+        RollingLog.append(data, to: auditLogURL, limit: .cleanHistory)
     }
 }

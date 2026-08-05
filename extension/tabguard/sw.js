@@ -7,40 +7,91 @@ let settings = { ...DEFAULT_SETTINGS };
 let gaming = { active: false, pauseVideos: false };
 let port = null;
 let reconnectDelay = 5_000;
+let reconnectTimer = null;
 
 // ── Activity tracking ────────────────────────────────────────────────
 // tab.lastAccessed is unreliable (undefined after discard, spotty updates),
 // so we keep our own record: per-tabId for this session, per-URL for days.
+// Writes are batched: markActive fires on every tab switch, and rewriting
+// the whole urlActivity map each time got expensive with thousands of URLs.
+// Marks land in in-memory dirty maps, flushed at most every 30 s and on
+// every tick alarm (the worker's guaranteed wake-up); readers merge storage
+// with the dirty maps, so observed behavior is unchanged.
 
-async function markActive(tabId, url) {
-  const now = Date.now();
+let dirtyTabActivity = {};   // tabId -> { lastActive, url? } pending flush
+let dirtyUrlActivity = {};   // url -> lastActive pending flush
+let removedTabIds = new Set();
+let flushTimer = null;
+const FLUSH_INTERVAL_MS = 30_000;
+
+function markActive(tabId, url) {
+  const entry = dirtyTabActivity[tabId] ?? (dirtyTabActivity[tabId] = {});
+  entry.lastActive = Date.now();
+  if (url) entry.url = url; // no url: keep whatever storage already has
+  if (url && !isProtected(url)) dirtyUrlActivity[url] = entry.lastActive;
+  scheduleFlush();
+}
+
+function scheduleFlush() {
+  if (flushTimer !== null) return;
+  flushTimer = setTimeout(flushActivity, FLUSH_INTERVAL_MS);
+}
+
+async function flushActivity() {
+  if (flushTimer !== null) { clearTimeout(flushTimer); flushTimer = null; }
+  if (!Object.keys(dirtyTabActivity).length &&
+      !Object.keys(dirtyUrlActivity).length &&
+      !removedTabIds.size) return;
+  // Snapshot and reset first, so marks arriving mid-write land in the next flush.
+  const tabDirty = dirtyTabActivity; dirtyTabActivity = {};
+  const urlDirty = dirtyUrlActivity; dirtyUrlActivity = {};
+  const removed = removedTabIds; removedTabIds = new Set();
+
   const { tabActivity = {} } = await chrome.storage.session.get("tabActivity");
-  tabActivity[tabId] = { lastActive: now, url: url ?? tabActivity[tabId]?.url };
+  for (const id of removed) delete tabActivity[id];
+  for (const [id, entry] of Object.entries(tabDirty)) {
+    tabActivity[id] = { ...tabActivity[id], ...entry };
+  }
   await chrome.storage.session.set({ tabActivity });
-  if (url && !isProtected(url)) {
+
+  if (Object.keys(urlDirty).length) {
     const { urlActivity = {} } = await chrome.storage.local.get("urlActivity");
-    urlActivity[url] = now;
+    Object.assign(urlActivity, urlDirty);
     await chrome.storage.local.set({ urlActivity });
   }
+}
+
+async function getTabActivity() {
+  const { tabActivity = {} } = await chrome.storage.session.get("tabActivity");
+  for (const id of removedTabIds) delete tabActivity[id];
+  for (const [id, entry] of Object.entries(dirtyTabActivity)) {
+    tabActivity[id] = { ...tabActivity[id], ...entry };
+  }
+  return tabActivity;
+}
+
+async function getUrlActivity() {
+  const { urlActivity = {} } = await chrome.storage.local.get("urlActivity");
+  return Object.assign(urlActivity, dirtyUrlActivity);
 }
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   try {
     const tab = await chrome.tabs.get(tabId);
-    await markActive(tabId, tab.url);
+    markActive(tabId, tab.url);
   } catch {}
 });
 
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url || changeInfo.audible !== undefined) {
-    if (tab.active || changeInfo.url) await markActive(tabId, tab.url);
+    if (tab.active || changeInfo.url) markActive(tabId, tab.url);
   }
 });
 
-chrome.tabs.onRemoved.addListener(async (tabId) => {
-  const { tabActivity = {} } = await chrome.storage.session.get("tabActivity");
-  delete tabActivity[tabId];
-  await chrome.storage.session.set({ tabActivity });
+chrome.tabs.onRemoved.addListener((tabId) => {
+  delete dirtyTabActivity[tabId];
+  removedTabIds.add(tabId);
+  scheduleFlush();
 });
 
 async function seedActivity() {
@@ -65,6 +116,7 @@ chrome.runtime.onStartup.addListener(init);
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.settings) {
     settings = { ...DEFAULT_SETTINGS, ...(changes.settings.newValue ?? {}) };
+    scheduleTick();
   }
 });
 
@@ -72,14 +124,25 @@ async function init() {
   const stored = await chrome.storage.local.get("settings");
   settings = { ...DEFAULT_SETTINGS, ...(stored.settings ?? {}) };
   await seedActivity();
-  chrome.alarms.create("tick", { periodInMinutes: 1 });
+  scheduleTick();
   connectHost();
+}
+
+// The tick only needs to fire a few times per discard window, not at
+// Chrome's 1-minute floor forever; re-created whenever settings change.
+let tickPeriodMinutes = 0;
+function scheduleTick() {
+  const period = Math.max(1, Math.min(settings.discardAfterMinutes / 5, 5));
+  if (period === tickPeriodMinutes) return;
+  tickPeriodMinutes = period;
+  chrome.alarms.create("tick", { periodInMinutes: period });
 }
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== "tick") return;
-  await sweep();
-  await pushStats();
+  await flushActivity(); // persist activity before the worker can suspend
+  const tabs = await sweep();
+  await pushStats(tabs);
 });
 
 function skips(tab) {
@@ -93,39 +156,55 @@ function skips(tab) {
 async function sweep() {
   const now = Date.now();
   const tabs = await chrome.tabs.query({});
-  const { tabActivity = {} } = await chrome.storage.session.get("tabActivity");
-  const { urlActivity = {} } = await chrome.storage.local.get("urlActivity");
+  const tabActivity = await getTabActivity();
+  const urlActivity = await getUrlActivity();
   const discardMs = settings.discardAfterMinutes * 60_000;
   const coldMs = settings.coldSaveAfterDays * 86_400_000;
+  const toColdSave = [];
 
   for (const tab of tabs) {
     if (skips(tab)) continue;
     const lastActive = tabActivity[tab.id]?.lastActive ?? urlActivity[tab.url] ?? now;
 
     if (settings.coldSaveEnabled && now - lastActive > coldMs) {
-      await coldSave(tab);
+      toColdSave.push(tab);
       continue;
     }
     if (now - lastActive > discardMs) {
-      try { await chrome.tabs.discard(tab.id); } catch {}
+      try { await chrome.tabs.discard(tab.id); tab.discarded = true; } catch {}
     }
   }
+  await coldSave(toColdSave);
   await pruneUrlActivity(urlActivity, now, coldMs);
+  // Post-sweep view of the world, so pushStats needn't query again.
+  const coldIds = new Set(toColdSave.map((tab) => tab.id));
+  return tabs.filter((tab) => !coldIds.has(tab.id));
 }
 
-async function coldSave(tab) {
+// One read and one write of the coldSaved array per sweep, no matter how
+// many tabs qualify.
+async function coldSave(tabs) {
+  if (!tabs.length) return;
   const { coldSaved = [] } = await chrome.storage.local.get("coldSaved");
-  if (!coldSaved.some((item) => item.url === tab.url)) {
-    coldSaved.unshift({
-      url: tab.url,
-      title: tab.title ?? tab.url,
-      favIconUrl: tab.favIconUrl ?? "",
-      savedAt: Date.now(),
-    });
-    if (coldSaved.length > COLD_SAVE_CAP) coldSaved.length = COLD_SAVE_CAP;
-    await chrome.storage.local.set({ coldSaved });
+  const known = new Set(coldSaved.map((item) => item.url));
+  let changed = false;
+  for (const tab of tabs) {
+    if (!known.has(tab.url)) {
+      known.add(tab.url);
+      coldSaved.unshift({
+        url: tab.url,
+        title: tab.title ?? tab.url,
+        favIconUrl: tab.favIconUrl ?? "",
+        savedAt: Date.now(),
+      });
+      changed = true;
+    }
   }
-  try { await chrome.tabs.remove(tab.id); } catch {}
+  if (coldSaved.length > COLD_SAVE_CAP) coldSaved.length = COLD_SAVE_CAP;
+  if (changed) await chrome.storage.local.set({ coldSaved });
+  for (const tab of tabs) {
+    try { await chrome.tabs.remove(tab.id); } catch {}
+  }
 }
 
 async function pruneUrlActivity(urlActivity, now, coldMs) {
@@ -163,6 +242,8 @@ async function applyGaming() {
 // ── Native port ──────────────────────────────────────────────────────
 
 function connectHost() {
+  if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+
   try {
     port = chrome.runtime.connectNative(HOST_NAME);
   } catch {
@@ -170,7 +251,6 @@ function connectHost() {
     scheduleReconnect();
     return;
   }
-  reconnectDelay = 5_000;
   port.onMessage.addListener(onHostMessage);
   port.onDisconnect.addListener(() => {
     port = null;
@@ -178,12 +258,19 @@ function connectHost() {
   });
   send({ type: "hello", extVersion: chrome.runtime.getManifest().version });
   pushStats();
-  // Ping keeps the service worker alive and lets the app mark us connected.
-  setInterval(() => send({ type: "pong" }), 30_000);
+  // No keepalive ping here: since Chrome 105 an open native-messaging port
+  // extends the worker's lifetime by itself, and the app pings us on its own
+  // schedule (answered with "pong" in onHostMessage). A 30 s interval used to
+  // do this — created per attempt and never cleared, so with the app absent
+  // ~720 leaked timers an hour all flushed into its stdin the moment it came up.
 }
 
 function scheduleReconnect() {
-  setTimeout(connectHost, reconnectDelay);
+  if (reconnectTimer !== null) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectHost();
+  }, reconnectDelay);
   reconnectDelay = Math.min(reconnectDelay * 2, 60_000);
 }
 
@@ -192,6 +279,12 @@ function send(message) {
 }
 
 async function onHostMessage(message) {
+  // Proof the app is actually there. The backoff used to reset as soon as
+  // connectNative() returned — but it returns a port even with no host
+  // installed and drops it immediately, so the delay never grew past 5 s and
+  // Chrome relaunched the lookup every 5 seconds, forever.
+  reconnectDelay = 5_000;
+
   switch (message.type) {
     case "settings":
       settings = { ...settings, ...message.settings };
@@ -221,9 +314,9 @@ async function onHostMessage(message) {
   await pushStats();
 }
 
-async function pushStats() {
+async function pushStats(tabs) {
   if (!port) return;
-  const tabs = await chrome.tabs.query({});
+  tabs ??= await chrome.tabs.query({}); // sweep passes its list; other callers query
   const discarded = tabs.filter((t) => t.discarded).length;
   const { coldSaved = [] } = await chrome.storage.local.get("coldSaved");
   send({

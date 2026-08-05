@@ -49,12 +49,20 @@ final class DesktopWidgetModel {
             panel.setFrameAutosaveName(autosave)
             self.panel = panel
         }
+        if panel?.contentView == nil {
+            panel?.contentView = NSHostingView(rootView: DesktopWidgetView())
+        }
         panel?.orderFrontRegardless()
         isVisible = true
     }
 
     private func hide() {
         panel?.orderOut(nil)
+        // Dropping the hosting view is what actually cancels the widget's
+        // polling `.task` — orderOut alone left an invisible view refreshing
+        // and animating every minute for as long as the app ran. The panel
+        // itself stays, so its frame autosave keeps working.
+        panel?.contentView = nil
         isVisible = false
     }
 }

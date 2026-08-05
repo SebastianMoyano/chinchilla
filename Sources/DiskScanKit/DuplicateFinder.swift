@@ -42,10 +42,10 @@ public enum DuplicateFinder {
         // ONE file here, never as a duplicate pair.
         let bySize = await Blocking.run {
             var bySize: [Int64: [(path: String, mtime: Date)]] = [:]
-            var seenInodes = Set<String>()
+            var seenInodes = Set<HardlinkKey>()
             for root in scanRoots {
                 collectFiles(root: root, minSize: minSize, isCancelled: isCancelled) { path, size, mtime, dev, ino in
-                    guard seenInodes.insert("\(dev):\(ino)").inserted else { return }
+                    guard seenInodes.insert(HardlinkKey(dev: dev, ino: ino)).inserted else { return }
                     bySize[size, default: []].append((path, mtime))
                 }
             }
@@ -111,9 +111,15 @@ public enum DuplicateFinder {
             count += 1
             if count % 4096 == 0, isCancelled?() == true { return }
             let info = Int32(ent.pointee.fts_info)
-            let path = String(cString: ent.pointee.fts_path)
-            let name = (path as NSString).lastPathComponent
+            // `name` is only read for directories and `path` only for files
+            // that survive the size filter — building both for every entry
+            // was an allocation (plus an NSString bridge) per file walked.
+            // Same trick as FTSWalker: fts already knows where the last
+            // component starts.
             if info == FTS_D {
+                let name = String(
+                    cString: ent.pointee.fts_path + Int(ent.pointee.fts_pathlen - ent.pointee.fts_namelen)
+                )
                 let ext = (name as NSString).pathExtension.lowercased()
                 if name.hasPrefix(".") || packageExtensions.contains(ext)
                     || name == "node_modules" || name == "Library" {
@@ -126,7 +132,7 @@ public enum DuplicateFinder {
             let size = Int64(st.st_size)
             guard size >= minSize else { continue }
             emit(
-                path, size,
+                String(cString: ent.pointee.fts_path), size,
                 Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec)),
                 st.st_dev, UInt64(st.st_ino)
             )

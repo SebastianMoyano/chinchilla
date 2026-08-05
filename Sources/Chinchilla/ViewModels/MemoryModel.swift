@@ -34,10 +34,14 @@ final class MemoryModel {
         let destination: SidebarItem?
     }
 
+    /// The in-flight refresh, kept so a follow-up (post-quit) can wait for it
+    /// instead of racing a second process enumeration against it.
+    private var refreshTask: Task<Void, Never>?
+
     func refresh() {
         guard !refreshing else { return }
         refreshing = true
-        Task {
+        refreshTask = Task {
             let pressure = SystemSampler.memoryPressure()
             health = switch pressure {
             case .normal: .fine
@@ -56,6 +60,11 @@ final class MemoryModel {
             appleIntelligenceBusy = await Task.detached {
                 ProcessMemory.appleIntelligenceActive()
             }.value
+            quittableNames = Set(
+                NSWorkspace.shared.runningApplications
+                    .filter { $0.activationPolicy == .regular }
+                    .compactMap(\.localizedName)
+            )
             refreshing = false
         }
     }
@@ -67,15 +76,24 @@ final class MemoryModel {
         topApps.first { $0.name != "macOS" }
     }
 
+    /// Taken once per refresh. Asking `NSWorkspace` per row meant enumerating
+    /// every process on the Mac four times for one card, on every render.
+    private(set) var quittableNames: Set<String> = []
+
     func canQuit(_ app: AppMemoryUsage) -> Bool {
-        runningApplication(named: app.name) != nil
+        quittableNames.contains(app.name)
     }
 
     func quit(_ app: AppMemoryUsage) {
         runningApplication(named: app.name)?.terminate()
         Task {
+            // Give the app a moment to actually exit before re-reading.
             try? await Task.sleep(for: .seconds(2))
-            refreshing = false
+            // Force-clearing `refreshing` here defeated the re-entrancy
+            // guard and let two full process enumerations race. Waiting the
+            // in-flight one out keeps the guard honest and still delivers
+            // the post-quit refresh.
+            await refreshTask?.value
             refresh()
         }
     }

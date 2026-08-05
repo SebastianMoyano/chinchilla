@@ -42,7 +42,13 @@ public enum ArtifactFinder {
         }
     }
 
-    public static func find(roots: [String] = defaultRoots(), maxDepth: Int = 8) async -> [ProjectArtifact] {
+    /// `isCancelled` reaches the walk and the sizing fts loops inside
+    /// `Blocking.run`, where `Task.isCancelled` never fires — pass a
+    /// `CancelFlag` probe so an abandoned scan actually stops walking.
+    public static func find(
+        roots: [String] = defaultRoots(), maxDepth: Int = 8,
+        isCancelled: (@Sendable () -> Bool)? = nil
+    ) async -> [ProjectArtifact] {
         // "Directory enumeration is cheap" was wrong: this recurses eight
         // levels through project folders, and on an iCloud-backed ~/Desktop a
         // single read stalls on the network — holding a cooperative lane the
@@ -50,7 +56,7 @@ public enum ArtifactFinder {
         let candidates = await Blocking.run { () -> [(path: String, project: String, kind: String)] in
             var found: [(path: String, project: String, kind: String)] = []
             for root in roots {
-                walk(dir: root, depth: 0, maxDepth: maxDepth, into: &found)
+                walk(dir: root, depth: 0, maxDepth: maxDepth, isCancelled: isCancelled, into: &found)
             }
             return found
         }
@@ -58,7 +64,10 @@ public enum ArtifactFinder {
         await withTaskGroup(of: ProjectArtifact?.self) { group in
             for candidate in candidates {
                 group.addTask {
-                    let size = await Blocking.run { DiskSize.allocated(at: candidate.path) }
+                    if isCancelled?() == true { return nil }
+                    let size = await Blocking.run {
+                        DiskSize.allocated(at: candidate.path, isCancelled: isCancelled)
+                    }
                     guard size > 0 else { return nil }
                     return ProjectArtifact(
                         path: candidate.path,
@@ -83,9 +92,13 @@ public enum ArtifactFinder {
 
     private static func walk(
         dir: String, depth: Int, maxDepth: Int,
+        isCancelled: (@Sendable () -> Bool)?,
         into results: inout [(path: String, project: String, kind: String)]
     ) {
         guard depth <= maxDepth else { return }
+        // Once per directory: cheap next to the read below, and it stops the
+        // whole recursion within one directory of the flag flipping.
+        if isCancelled?() == true { return }
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(atPath: dir) else { return }
 
@@ -102,7 +115,7 @@ public enum ArtifactFinder {
                 results.append((path: path, project: dir, kind: kind.rawValue))
                 continue  // never descend into the artifact itself
             }
-            walk(dir: path, depth: depth + 1, maxDepth: maxDepth, into: &results)
+            walk(dir: path, depth: depth + 1, maxDepth: maxDepth, isCancelled: isCancelled, into: &results)
         }
     }
 

@@ -80,6 +80,17 @@ final class DailyBoostModel {
         }
     }
 
+    /// The acting half of the everyday profile. Only the reversible actions
+    /// happen without asking — sleeping background tabs and stopping Docker's
+    /// idle VM, both of which undo themselves the moment you use them again.
+    /// Anything that closes an app becomes a question the user answers once.
+    private func applyMemoryPlan() async {
+        guard let appState else { return }
+        await appState.everydayPlan.refreshDockerIdle()
+        appState.everydayPlan.refresh(samples: appState.memoryHistory.samples)
+        await appState.everydayPlan.apply()
+    }
+
     /// The most effective advice nobody gives in time: "when did you last
     /// restart?". Fires once past 14 days of uptime, then at most weekly.
     private func checkUptime() async {
@@ -102,6 +113,7 @@ final class DailyBoostModel {
         appState?.tabSaver.reevaluateAutoIfNeeded()
 
         await checkUptime()
+        await applyMemoryPlan()
 
         let pressure = SystemSampler.memoryPressure()
         guard pressure == .warning || pressure == .critical else { return }

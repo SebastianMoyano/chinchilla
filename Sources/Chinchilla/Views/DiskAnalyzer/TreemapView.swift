@@ -102,6 +102,22 @@ enum TreemapLayout {
 struct TreemapView: View {
     let model: DiskAnalyzerModel
     @State private var hovered: String?
+    /// The squarify layout used to be recomputed inside the GeometryReader
+    /// body, which re-runs on every hover change — so moving the mouse across
+    /// the map re-laid it out per highlight. The cells only actually change
+    /// when the displayed node (or its data, or the available size) does, so
+    /// they're cached against exactly that.
+    @State private var cachedCells: [TreemapCell] = []
+
+    /// What the layout depends on. Size and child count cover a directory
+    /// still filling in during a scan; the geometry is part of the key
+    /// because a resized window must re-layout too.
+    private struct LayoutKey: Equatable {
+        let path: String?
+        let nodeSize: Int64
+        let childCount: Int
+        let area: CGSize
+    }
 
     private static let palette: [Color] = [
         .orange, .blue, .purple, .teal, .pink, .indigo, .mint, .red, .cyan, .yellow,
@@ -109,7 +125,13 @@ struct TreemapView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let cells = cells(in: CGRect(origin: .zero, size: geo.size).insetBy(dx: 8, dy: 8))
+            let key = LayoutKey(
+                path: model.displayed?.path,
+                nodeSize: model.displayed?.size ?? 0,
+                childCount: model.displayed?.children.count ?? 0,
+                area: geo.size
+            )
+            let cells = cachedCells
             ZStack(alignment: .topLeading) {
                 Canvas { context, _ in
                     for cell in cells {
@@ -152,6 +174,9 @@ struct TreemapView: View {
                         hovered = nil
                     }
                 }
+            }
+            .onChange(of: key, initial: true) {
+                cachedCells = self.cells(in: CGRect(origin: .zero, size: geo.size).insetBy(dx: 8, dy: 8))
             }
         }
         .background(Color(nsColor: .underPageBackgroundColor))

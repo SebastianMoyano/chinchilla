@@ -12,7 +12,15 @@ final class SnapshotModel {
     var thinning = false
     var thinResult: String?
 
-    func refresh() {
+    private var lastRefresh: Date?
+
+    /// Rate-limited: `tmutil` spawns a process, and the Dashboard — the
+    /// default tab — asks on every appearance. Snapshots are made hourly, so
+    /// a five-minute-old answer is still the truth. `force` is for the one
+    /// caller that just changed them (thinning).
+    func refresh(force: Bool = false) {
+        if !force, let lastRefresh, Date().timeIntervalSince(lastRefresh) < 300 { return }
+        lastRefresh = Date()
         Task {
             snapshots = await TimeMachine.localSnapshots()
         }
@@ -33,7 +41,7 @@ final class SnapshotModel {
             } catch {
                 thinResult = String(localized: "Thinning was cancelled or failed.")
             }
-            refresh()
+            refresh(force: true)
         }
     }
 }

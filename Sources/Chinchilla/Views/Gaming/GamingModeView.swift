@@ -23,10 +23,10 @@ struct GamingModeView: View {
         .navigationTitle("Gaming Mode")
         .onAppear {
             model.refreshCandidates()
-            model.startSampling()
+            model.statsViewerAppeared()
         }
         .onDisappear {
-            model.stopSampling()
+            model.statsViewerDisappeared()
         }
     }
 
@@ -213,8 +213,6 @@ struct GamingModeView: View {
         .card()
     }
 
-    @State private var availableShortcuts: [String] = []
-
     private func focusShortcutRow(_ model: GamingModel) -> some View {
         HStack(spacing: 8) {
             Label("Focus shortcut", systemImage: "moon.fill")
@@ -226,7 +224,7 @@ struct GamingModeView: View {
                 set: { UserDefaults.standard.set($0, forKey: GamingModel.focusShortcutOnKey) }
             )) {
                 Text("None").tag("")
-                ForEach(availableShortcuts, id: \.self) { Text(verbatim: $0).tag($0) }
+                ForEach(model.availableShortcuts, id: \.self) { Text(verbatim: $0).tag($0) }
             }
             .fixedSize()
             .labelsHidden()
@@ -237,7 +235,7 @@ struct GamingModeView: View {
                 set: { UserDefaults.standard.set($0, forKey: GamingModel.focusShortcutOffKey) }
             )) {
                 Text("None").tag("")
-                ForEach(availableShortcuts, id: \.self) { Text(verbatim: $0).tag($0) }
+                ForEach(model.availableShortcuts, id: \.self) { Text(verbatim: $0).tag($0) }
             }
             .fixedSize()
             .labelsHidden()
@@ -246,7 +244,9 @@ struct GamingModeView: View {
             Spacer()
         }
         .task {
-            availableShortcuts = await ShortcutsRunner.list()
+            // Cached in the model: the row used to spawn the `shortcuts` CLI
+            // on every appearance and discard the result on disappear.
+            model.loadShortcutsIfStale()
         }
     }
 

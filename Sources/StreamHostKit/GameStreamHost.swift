@@ -31,6 +31,8 @@ public final class GameStreamHost: @unchecked Sendable {
     }
     private let session = Locked(PairSession())
     private let pairedClients = Locked<[String: Data]>([:])   // uniqueid -> client cert
+    /// Every accepted connection, so `stop()` can actually stop them.
+    private let live = Locked<[NWConnection]>([])
 
     public init() throws {
         identity = try HostIdentity.loadOrCreate()
@@ -94,6 +96,16 @@ public final class GameStreamHost: @unchecked Sendable {
         httpsListener?.cancel()
         httpListener = nil
         httpsListener = nil
+        // Cancel what the listeners handed out too. Moonlight polls
+        // /serverinfo over keep-alive connections and each one re-arms its
+        // receive loop forever — cancelling only the listeners left every
+        // accepted connection alive and accumulating.
+        let open = live.withLock { connections -> [NWConnection] in
+            let all = connections
+            connections.removeAll()
+            return all
+        }
+        for connection in open { connection.cancel() }
         currentPIN = nil
     }
 
@@ -114,6 +126,15 @@ public final class GameStreamHost: @unchecked Sendable {
     // MARK: HTTP plumbing
 
     private func handle(_ connection: NWConnection, secure: Bool) {
+        live.withLock { $0.append(connection) }
+        connection.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .cancelled, .failed:
+                self?.live.withLock { $0.removeAll { $0 === connection } }
+            default:
+                break
+            }
+        }
         connection.start(queue: queue)
         receive(connection, buffered: Data(), secure: secure)
     }

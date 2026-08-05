@@ -13,6 +13,9 @@ public final class CastHTTPServer: @unchecked Sendable {
     /// Every accepted connection, so `stopAll` can actually stop them.
     private let live = Locked<[NWConnection]>([])
     public private(set) var port: UInt16 = 0
+    /// About a second and a half of 1080p at the bitrates used here — enough
+    /// to ride out a hiccup, not enough to hide a receiver that can't keep up.
+    static let maxStreamBacklogBytes = 8 * 1024 * 1024
     /// Diagnostics hook: every request path the client asks for.
     public var onRequest: (@Sendable (String, String) -> Void)?
 
@@ -48,10 +51,14 @@ public final class CastHTTPServer: @unchecked Sendable {
             return all
         }
         for connection in open { connection.cancel() }
-        queue.sync {
-            files.removeAllObjects()
-            streamRoutes.removeAll()
-            prefixRoutes.removeAll()
+        // Async, not sync: these are all called from the main actor, and the
+        // queue they'd block on is the one servicing every live connection.
+        // Nothing here needs the write to have landed before returning, and a
+        // serial queue keeps the ordering that does matter.
+        queue.async {
+            self.files.removeAllObjects()
+            self.streamRoutes.removeAll()
+            self.prefixRoutes.removeAll()
         }
         port = 0
     }
@@ -59,7 +66,10 @@ public final class CastHTTPServer: @unchecked Sendable {
     /// Registers a local file; returns the URL path component (/media/<token>).
     public func register(file url: URL) -> String {
         let token = UUID().uuidString
-        queue.sync { files[token] = url }
+        // The token is ours already; the TV can't ask for it before this
+        // enqueued write runs, because requests arrive on this same serial
+        // queue afterwards.
+        queue.async { self.files[token] = url }
         return "/media/\(token)"
     }
 
@@ -185,10 +195,28 @@ public final class CastHTTPServer: @unchecked Sendable {
                 return
             }
             let alive = Locked(true)
+            // Bytes handed to the connection that it hasn't reported sending.
+            // The capture produces fragments at a fixed rate whether or not
+            // the TV keeps up, and `send` here returns immediately — so a slow
+            // or half-hung receiver grew NWConnection's queue at tens of MB per
+            // minute for as long as the mirroring lasted. There is no buffering
+            // your way out of a link that's too slow for live video, so past
+            // the cap we drop the receiver instead of the memory.
+            let inFlight = Locked(0)
             let writer = StreamWriter(
                 send: { data in
                     guard alive.withLock({ $0 }) else { return false }
+                    let backlog = inFlight.withLock { pending -> Int in
+                        pending += data.count
+                        return pending
+                    }
+                    guard backlog <= Self.maxStreamBacklogBytes else {
+                        alive.withLock { $0 = false }
+                        connection.cancel()
+                        return false
+                    }
                     connection.send(content: data, completion: .contentProcessed { error in
+                        inFlight.withLock { $0 -= data.count }
                         if error != nil { alive.withLock { $0 = false } }
                     })
                     return true
@@ -198,9 +226,18 @@ public final class CastHTTPServer: @unchecked Sendable {
                     connection.cancel()
                 }
             )
-            connection.stateUpdateHandler = { state in
-                if case .cancelled = state { alive.withLock { $0 = false } }
-                if case .failed = state { alive.withLock { $0 = false } }
+            // This replaces the handler installed in handle(), so it must
+            // keep doing that handler's job too — dropping the connection
+            // from `live` — or every stream connection stays retained there
+            // until stopAll.
+            connection.stateUpdateHandler = { [weak self] state in
+                switch state {
+                case .cancelled, .failed:
+                    alive.withLock { $0 = false }
+                    self?.live.withLock { $0.removeAll { $0 === connection } }
+                default:
+                    break
+                }
             }
             streamHandler(writer)
             return  // connection is consumed by the stream
@@ -246,11 +283,13 @@ public final class CastHTTPServer: @unchecked Sendable {
     }
 
     public func setStreamRoute(_ path: String, handler: (@Sendable (StreamWriter) -> Void)?) {
-        queue.sync {
+        // Same reasoning as `register(file:)`: called from the main actor,
+        // and the queue it would block on is servicing live connections.
+        queue.async { [weak self] in
             if let handler {
-                streamRoutes[path] = handler
+                self?.streamRoutes[path] = handler
             } else {
-                streamRoutes.removeValue(forKey: path)
+                self?.streamRoutes.removeValue(forKey: path)
             }
         }
     }
@@ -262,11 +301,11 @@ public final class CastHTTPServer: @unchecked Sendable {
     private var prefixRoutes: [String: @Sendable (String) -> (String, Data)?] = [:]
 
     public func setPrefixRoute(_ prefix: String, handler: (@Sendable (String) -> (String, Data)?)?) {
-        queue.sync {
+        queue.async { [weak self] in
             if let handler {
-                prefixRoutes[prefix] = handler
+                self?.prefixRoutes[prefix] = handler
             } else {
-                prefixRoutes.removeValue(forKey: prefix)
+                self?.prefixRoutes.removeValue(forKey: prefix)
             }
         }
     }

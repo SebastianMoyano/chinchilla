@@ -81,17 +81,28 @@ final class DiskAnalyzerModel {
     }
 
     var dupPhase: DupPhase = .idle
-    var duplicateGroups: [DuplicateGroup] = []
+    var duplicateGroups: [DuplicateGroup] = [] {
+        didSet { indexDuplicateSizes() }
+    }
     var selectedDupes: Set<String> = []
     var dupResult: String?
     private var dupTask: Task<Void, Never>?
 
-    var selectedDupeBytes: Int64 {
-        var total: Int64 = 0
+    /// Size per duplicate path, indexed when the groups arrive. The view reads
+    /// the total on every render, and walking every group and every path in it
+    /// to answer that is work proportional to the whole scan, per frame.
+    private(set) var dupeSizeByPath: [String: Int64] = [:]
+
+    func indexDuplicateSizes() {
+        var sizes: [String: Int64] = [:]
         for group in duplicateGroups {
-            total += group.fileSize * Int64(group.paths.count { selectedDupes.contains($0) })
+            for path in group.paths { sizes[path] = group.fileSize }
         }
-        return total
+        dupeSizeByPath = sizes
+    }
+
+    var selectedDupeBytes: Int64 {
+        selectedDupes.reduce(0) { $0 + (dupeSizeByPath[$1] ?? 0) }
     }
 
     func startDuplicateScan() {
@@ -100,7 +111,12 @@ final class DiskAnalyzerModel {
         dupResult = nil
         duplicateGroups = []
         dupTask = Task {
-            let groups = await DuplicateFinder.find(isCancelled: { Task.isCancelled })
+            // The finder hashes files inside `Blocking.run`, where
+            // `Task.isCancelled` is always false — so "Cancel" left a full
+            // duplicate scan hashing the disk behind the user's back.
+            let groups = await withCancelFlag { cancel in
+                await DuplicateFinder.find(isCancelled: cancel.probe)
+            }
             guard !Task.isCancelled else {
                 dupPhase = .idle
                 return

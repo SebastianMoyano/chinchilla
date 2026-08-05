@@ -138,15 +138,10 @@ public enum TabGuardMailbox {
 
     public static func appendEvent(_ event: TabGuardEvent) {
         ensureDirectory()
-        guard var data = try? JSONEncoder().encode(event) else { return }
-        data.append(0x0A)
-        if let handle = try? FileHandle(forWritingTo: eventsURL) {
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: data)
-        } else {
-            try? data.write(to: eventsURL)
-        }
+        guard let data = try? JSONEncoder().encode(event) else { return }
+        // Rotated, because every browser host re-reads this file every couple
+        // of seconds: unbounded, the app got slower the longer it was used.
+        RollingLog.append(data, to: eventsURL, limit: .events)
     }
 
     public static func readEvents(afterSeq seq: Int) -> [TabGuardEvent] {
@@ -189,10 +184,34 @@ public enum TabGuardMailbox {
         return (combined, connections)
     }
 
+    /// What the last write put on disk, minus the liveness stamp — see
+    /// `writeStatus`. Keyed by pid only for form's sake: a host process
+    /// ever writes one status file, its own.
+    private static let lastWritten = Locked<[Int32: (payload: Data, at: Date)]>([:])
+
     public static func writeStatus(_ status: TabGuardStatus, pid: Int32) {
         ensureDirectory()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
+        // This runs on every incoming stdin message, but `lastMessageAt` is
+        // the only field that moves on most of them, and the liveness check
+        // reading it (`isConnected`) only cares at 90 s granularity. So:
+        // compare the status with that stamp held out, and skip the encode +
+        // atomic-rename write when nothing else changed and the on-disk
+        // stamp is under 30 s old — still three writes inside every liveness
+        // window.
+        var unstamped = status
+        unstamped.lastMessageAt = nil
+        guard let payload = try? encoder.encode(unstamped) else { return }
+        let skip = lastWritten.withLock { state -> Bool in
+            if let last = state[pid], last.payload == payload,
+               Date().timeIntervalSince(last.at) < 30 {
+                return true
+            }
+            state[pid] = (payload, Date())
+            return false
+        }
+        if skip { return }
         if let data = try? encoder.encode(status) {
             try? data.write(to: statusURL(pid: pid), options: .atomic)
         }
@@ -228,22 +247,44 @@ public enum TabGuardHost {
         var lastEventSeq = TabGuardMailbox.maxEventSeq()
 
         let forwarder = Task {
+            // (size, mtime) of each mailbox file at its last read. Every host
+            // process (one per browser profile) polls both files every two
+            // seconds, and almost every tick nothing has changed: a stat is
+            // enough to know that without re-reading and re-decoding JSON.
+            // Atomic writes replace the file, so a change always moves one
+            // of the two.
+            func stamp(of url: URL) -> (size: Int, modified: Date) {
+                let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+                return ((attrs?[.size] as? NSNumber)?.intValue ?? -1,
+                        attrs?[.modificationDate] as? Date ?? .distantPast)
+            }
+            var desiredStamp: (size: Int, modified: Date) = (-1, .distantPast)
+            var eventsStamp: (size: Int, modified: Date) = (-1, .distantPast)
+
             while !Task.isCancelled {
-                if let desired = TabGuardMailbox.readDesired(), desired != lastDesired {
-                    if let settingsData = try? JSONEncoder().encode(desired.settings),
-                       let settingsObj = try? JSONSerialization.jsonObject(with: settingsData) {
-                        send(["type": "settings", "settings": settingsObj])
+                let currentDesired = stamp(of: TabGuardMailbox.desiredURL)
+                if currentDesired != desiredStamp {
+                    desiredStamp = currentDesired
+                    if let desired = TabGuardMailbox.readDesired(), desired != lastDesired {
+                        if let settingsData = try? JSONEncoder().encode(desired.settings),
+                           let settingsObj = try? JSONSerialization.jsonObject(with: settingsData) {
+                            send(["type": "settings", "settings": settingsObj])
+                        }
+                        send(["type": "gaming", "active": desired.gamingActive,
+                              "pauseVideos": desired.pauseVideos])
+                        lastDesired = desired
                     }
-                    send(["type": "gaming", "active": desired.gamingActive,
-                          "pauseVideos": desired.pauseVideos])
-                    lastDesired = desired
                 }
-                for event in TabGuardMailbox.readEvents(afterSeq: lastEventSeq) {
-                    var message: [String: Any] = ["type": event.type]
-                    if let urls = event.urls { message["urls"] = urls }
-                    if let all = event.all { message["all"] = all }
-                    send(message)
-                    lastEventSeq = max(lastEventSeq, event.seq)
+                let currentEvents = stamp(of: TabGuardMailbox.eventsURL)
+                if currentEvents != eventsStamp {
+                    eventsStamp = currentEvents
+                    for event in TabGuardMailbox.readEvents(afterSeq: lastEventSeq) {
+                        var message: [String: Any] = ["type": event.type]
+                        if let urls = event.urls { message["urls"] = urls }
+                        if let all = event.all { message["all"] = all }
+                        send(message)
+                        lastEventSeq = max(lastEventSeq, event.seq)
+                    }
                 }
                 try? await Task.sleep(for: .seconds(2))
             }

@@ -15,6 +15,7 @@ enum ChinchillaCLI {
         case history(json: Bool, limit: Int)
         case status(json: Bool)
         case orphans(json: Bool)
+        case memory(json: Bool)
         case devices(seconds: Int)
         case mirrorTest(host: String)
         case gameStreamTest(seconds: Int)
@@ -39,6 +40,8 @@ enum ChinchillaCLI {
             return .status(json: args.contains("--json"))
         case "orphans":
             return .orphans(json: args.contains("--json"))
+        case "memory":
+            return .memory(json: args.contains("--json"))
         case "devices":
             return .devices(seconds: args.count > 1 ? (Int(args[1]) ?? 8) : 8)
         case "caststream-test":
@@ -125,6 +128,8 @@ enum ChinchillaCLI {
             return 0
         case .devices(let seconds):
             return await DeviceDiagnostics.run(seconds: seconds)
+        case .memory(let json):
+            return printMemory(json: json)
         case .orphans(let json):
             let found = await OrphanFinder.scan()
             if json {
@@ -237,6 +242,79 @@ enum ChinchillaCLI {
         }
     }
 
+    /// The memory screen's findings, in a terminal. Written for a fleet: over
+    /// SSH this answers "is that Mac actually short of memory, or does it just
+    /// feel slow?" without anyone having to be sitting at it.
+    private static func printMemory(json: Bool) -> Int32 {
+        let samples = MemoryHistory.load()
+        guard !samples.isEmpty else {
+            print("No history yet. Chinchilla records one reading a minute while it runs.")
+            return 0
+        }
+        let memory = SystemSampler.memoryUsage()
+        let plan = MemoryPlan.make(
+            samples: samples,
+            currentSwapBytes: SystemSampler.swapUsed(),
+            installedBytes: memory.total,
+            browserTabsAsleep: false,
+            dockerIdle: false
+        )
+        let offenders = MemoryHistory.offenders(in: samples)
+
+        if json {
+            let objects: [[String: Any]] = offenders.map { offender in
+                [
+                    "name": offender.name,
+                    "presence": offender.presence,
+                    "averageBytes": offender.averageBytes,
+                    "peakBytes": offender.peakBytes,
+                    "averageWhileSwappingBytes": offender.averageWhileSwapping ?? 0,
+                ]
+            }
+            let payload: [String: Any] = [
+                "samples": samples.count,
+                "installedBytes": plan.installedBytes,
+                "dailyDemandBytes": plan.dailyDemandBytes,
+                "shortfallBytes": plan.shortfallBytes,
+                "learnedSwapThresholdBytes": plan.threshold,
+                "currentSwapBytes": SystemSampler.swapUsed(),
+                "swappingShare": MemoryHistory.swappingShare(in: samples),
+                "apps": objects,
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]),
+               let text = String(data: data, encoding: .utf8) {
+                print(text)
+            }
+            return 0
+        }
+
+        func gb(_ bytes: Int64) -> String {
+            String(format: "%.2f GB", Double(bytes) / Double(1 << 30))
+        }
+        print("Readings:        \(samples.count)")
+        print("Installed:       \(gb(plan.installedBytes))")
+        print("Daily set wants: \(gb(plan.dailyDemandBytes))"
+              + (plan.shortfallBytes > 0 ? "  (over by \(gb(plan.shortfallBytes)))" : ""))
+        print("Swap now:        \(gb(SystemSampler.swapUsed()))"
+              + "   this Mac drags past \(gb(plan.threshold))")
+        print(String(format: "Swapping:        %.0f%% of readings",
+                     MemoryHistory.swappingShare(in: samples) * 100))
+        print("")
+        print("WHAT HOLDS IT                 AVERAGE     PEAK   WHILE SWAPPING   UP")
+        for offender in offenders.prefix(10) {
+            let swapping = offender.averageWhileSwapping.map(gb) ?? "—"
+            print(String(
+                format: "%-28s %8s %8s %16s %4.0f%%",
+                (offender.name as NSString).utf8String!,
+                (gb(offender.averageBytes) as NSString).utf8String!,
+                (gb(offender.peakBytes) as NSString).utf8String!,
+                (swapping as NSString).utf8String!,
+                offender.presence * 100
+            ))
+        }
+        return 0
+    }
+
     private static let helpText = """
     Chinchilla CLI 🐭✨
 
@@ -248,6 +326,9 @@ enum ChinchillaCLI {
       Chinchilla status [--json]  One-shot health snapshot (disk, memory,
                                   uptime, battery, SMART, MDM).
       Chinchilla orphans [--json] Leftovers from apps that are already gone.
+      Chinchilla memory [--json]  What has been holding this Mac's memory, from
+                                  its own recorded history, plus the everyday
+                                  plan's verdict. Useful over SSH on a fleet.
       Chinchilla help             This text.
 
     Cleaning honors the same safety policy, running-app guard and audit log

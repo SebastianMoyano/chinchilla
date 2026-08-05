@@ -5,15 +5,19 @@ import DiskScanKit
 public enum CleanScanner {
     /// Scans all rules and returns cleanable items with sizes.
     /// Never deletes anything — scanning is always a dry run.
+    /// `isCancelled` reaches the fts loops inside `Blocking.run`, where
+    /// `Task.isCancelled` never fires — pass a `CancelFlag` probe to make an
+    /// abandoned scan actually stop walking (see CancelFlag in DiskScanKit).
     public static func scan(
         rules: [CleanRule] = RuleCatalog.rules,
-        hasFullDiskAccess: Bool
+        hasFullDiskAccess: Bool,
+        isCancelled: (@Sendable () -> Bool)? = nil
     ) async -> ScanReport {
         let usable = rules.filter { hasFullDiskAccess || !$0.requiresFullDiskAccess }
         var items: [CleanItem] = []
         await withTaskGroup(of: [CleanItem].self) { group in
             for rule in usable {
-                group.addTask { await scanRule(rule) }
+                group.addTask { await scanRule(rule, isCancelled: isCancelled) }
             }
             for await ruleItems in group {
                 items.append(contentsOf: ruleItems)
@@ -39,14 +43,16 @@ public enum CleanScanner {
         let modified: Date
     }
 
-    private static func scanRule(_ rule: CleanRule) async -> [CleanItem] {
+    private static func scanRule(
+        _ rule: CleanRule, isCancelled: (@Sendable () -> Bool)?
+    ) async -> [CleanItem] {
         // Phase 1 was called "cheap" and isn't: expanding a glob is a
         // directory read per component plus an lstat per result, and the
         // catalog fans out one task per rule — 27 at once, on a pool with one
         // lane per core. Measured with this exact shape: a concurrent
         // heartbeat degraded from 38 ms to a worst gap of 5974 ms.
         let candidates = await Blocking.run { matchCandidates(rule) }
-        return await size(candidates, for: rule)
+        return await size(candidates, for: rule, isCancelled: isCancelled)
     }
 
     private static func matchCandidates(_ rule: CleanRule) -> [Candidate] {
@@ -85,12 +91,18 @@ public enum CleanScanner {
 
     /// Phase 2: size every match in parallel — each hop already goes through
     /// `Blocking.run`, so this one was fine all along.
-    private static func size(_ candidates: [Candidate], for rule: CleanRule) async -> [CleanItem] {
+    private static func size(
+        _ candidates: [Candidate], for rule: CleanRule,
+        isCancelled: (@Sendable () -> Bool)?
+    ) async -> [CleanItem] {
         var items: [CleanItem] = []
         await withTaskGroup(of: CleanItem?.self) { group in
             for candidate in candidates {
                 group.addTask {
-                    let size = await Blocking.run { DiskSize.allocated(at: candidate.path) }
+                    if isCancelled?() == true { return nil }
+                    let size = await Blocking.run {
+                        DiskSize.allocated(at: candidate.path, isCancelled: isCancelled)
+                    }
                     guard size > 0 else { return nil }
                     return CleanItem(
                         ruleID: rule.id,

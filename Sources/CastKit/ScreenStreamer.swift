@@ -202,9 +202,20 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
         guard !isRunning else { return }
         store.reset()
 
-        let display = try await Self.mainDisplay()
-        var (width, height) = Self.captureSize(for: quality, display: display)
-        var chosenDisplay = display
+        // Resolve the main display only when the source actually captures it.
+        // Every SCShareableContent lookup is a slow XPC query that can hang
+        // (hence the timeouts), and the other sources compute their own size
+        // below: the extra query here was pure overhead — and for the extended
+        // display it can't even be shared, because its lookup has to run after
+        // the virtual display exists.
+        var width = 0
+        var height = 0
+        var chosenDisplay: SCDisplay?
+        if case .wholeScreen = source {
+            let display = try await Self.mainDisplay()
+            (width, height) = Self.captureSize(for: quality, display: display)
+            chosenDisplay = display
+        }
 
         // A second desktop: bring the display up first, then capture it like
         // any other. macOS moves windows onto it the moment it appears.
@@ -285,8 +296,17 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
         configuration.sampleRate = 48_000
         configuration.channelCount = 2
 
-        let filter = windowFilter
-            ?? SCContentFilter(display: chosenDisplay, excludingApplications: [], exceptingWindows: [])
+        // Every source case above set one of the two; the guard is belt and
+        // braces, not a reachable path.
+        let filter: SCContentFilter
+        if let windowFilter {
+            filter = windowFilter
+        } else if let chosenDisplay {
+            filter = SCContentFilter(display: chosenDisplay, excludingApplications: [], exceptingWindows: [])
+        } else {
+            throw NSError(domain: "CastKit", code: 10,
+                          userInfo: [NSLocalizedDescriptionKey: "No display to capture"])
+        }
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: videoQueue)
         if includeAudio {
@@ -325,6 +345,10 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
         virtualDisplay = nil
         await segmenter?.finish()
         segmenter = nil
+        // Viewers wait on `store.hasContent` to know the session is over. Left
+        // full, that stayed true after the stop, so every viewer task went on
+        // polling once a second forever, each one holding its connection open.
+        store.reset()
     }
 
     /// Waits until the first playable segment exists, so we never hand the

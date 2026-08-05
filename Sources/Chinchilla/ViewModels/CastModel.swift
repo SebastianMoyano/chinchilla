@@ -110,7 +110,11 @@ final class CastModel {
     var castingName: String?
     /// Shown in the UI so "which address is my Mac serving from?" is never
     /// a mystery (and to make the manual-IP field's purpose obvious).
-    var macAddressForDisplay: String? { CastHTTPServer.lanAddress(reachableFrom: targetHost) }
+    /// Stored, not computed — same reasoning as `screenPermissionGranted`:
+    /// the answer only changes when the connection does, and as a computed
+    /// property the getifaddrs interface walk behind it ran on every render
+    /// of a screen that redraws every couple of seconds while casting.
+    private(set) var macAddressForDisplay: String? = CastHTTPServer.lanAddress(reachableFrom: nil)
     var lastError: String?
     var firewallHint = false
 
@@ -286,12 +290,26 @@ final class CastModel {
     }
 
     func refreshScreenPermission() {
-        screenPermissionGranted = ScreenRecordingPermission.isGranted
+        // Observation publishes on every set, identical value or not, and this
+        // is called on each app activation — so an unconditional assignment
+        // re-rendered the whole Cast screen for nothing. The check itself is a
+        // ~48 ms TCC round trip, which is the other half of the reason.
+        let granted = ScreenRecordingPermission.isGranted
+        if granted != screenPermissionGranted { screenPermissionGranted = granted }
     }
 
     func requestScreenPermission() {
         _ = ScreenRecordingPermission.request()
         refreshScreenPermission()
+    }
+
+    /// Recomputed only at the moments the answer can change — connecting,
+    /// disconnecting, or a cast start that already did the interface walk
+    /// (which passes its result in rather than walking again).
+    private func refreshMacAddress(_ known: String? = nil) {
+        // Observation publishes on every set, so only write when it changed.
+        let address = known ?? CastHTTPServer.lanAddress(reachableFrom: targetHost)
+        if address != macAddressForDisplay { macAddressForDisplay = address }
     }
 
     func startMirroring() {
@@ -367,6 +385,7 @@ final class CastModel {
                     mirrorError = String(localized: "Couldn't start the local server.")
                     return
                 }
+                refreshMacAddress(ip)
                 // Two ways to feed the TV:
                 //  • progressive fMP4 — one long-lived response, the same
                 //    container TVs already play for files. Lower latency and
@@ -532,8 +551,57 @@ final class CastModel {
 
     // MARK: Discovery (both protocols at once)
 
+    private var lastSweep: Date?
+    /// How many views showing the device list are on screen. The Bonjour
+    /// browses are continuous, so without a matching stop the first visit to
+    /// the Cast screen left three mDNS browsers running for the life of a
+    /// menu-bar app that never quits.
+    private var discoveryViewers = 0
+
+    func discoveryViewAppeared() {
+        discoveryViewers += 1
+        startDiscoveryIfStale()
+    }
+
+    func discoveryViewDisappeared() {
+        discoveryViewers = max(0, discoveryViewers - 1)
+        if discoveryViewers == 0 { stopDiscovery() }
+    }
+
+    /// For places that open constantly — the menu bar panel — where a full
+    /// SSDP sweep per open would be multicast traffic nobody asked for. The
+    /// browses restart if a previous close stopped them; only the one-shot
+    /// sweep is rate-limited.
+    func startDiscoveryIfStale(after interval: TimeInterval = 30) {
+        if let lastSweep, Date().timeIntervalSince(lastSweep) < interval {
+            startBrowsers()
+            return
+        }
+        startDiscovery()
+    }
+
     func startDiscovery() {
         searchedAndEmpty = false
+        lastSweep = Date()
+        startBrowsers()
+        // DLNA: one SSDP sweep per refresh.
+        Task {
+            let locations = await SSDP.discoverRenderers()
+            var renderers: [DLNARenderer] = []
+            for location in locations {
+                if let renderer = await UPnPDescription.fetchRenderer(from: location) {
+                    renderers.append(renderer)
+                }
+            }
+            dlnaRenderers = renderers.sorted { $0.name < $1.name }
+            rebuildTargets()
+            searchedAndEmpty = targets.isEmpty
+        }
+    }
+
+    /// Continuous Bonjour browses, one per protocol. Each guards against
+    /// double starts, so calling this on every appearance is free.
+    private func startBrowsers() {
         // FCast: continuous Bonjour browse.
         if discoveryState != .browsing {
             discovery.start(
@@ -560,19 +628,6 @@ final class CastModel {
                 self?.castDevices = devices
                 self?.rebuildTargets()
             }
-        }
-        // DLNA: one SSDP sweep per refresh.
-        Task {
-            let locations = await SSDP.discoverRenderers()
-            var renderers: [DLNARenderer] = []
-            for location in locations {
-                if let renderer = await UPnPDescription.fetchRenderer(from: location) {
-                    renderers.append(renderer)
-                }
-            }
-            dlnaRenderers = renderers.sorted { $0.name < $1.name }
-            rebuildTargets()
-            searchedAndEmpty = targets.isEmpty
         }
     }
 
@@ -602,6 +657,7 @@ final class CastModel {
     func stopDiscovery() {
         castDiscovery.stop()
         discovery.stop()
+        airplayDiscovery.stop()
         discoveryState = .idle
     }
 
@@ -622,6 +678,7 @@ final class CastModel {
     func connect(to target: CastTarget) {
         disconnect()
         connected = target
+        refreshMacAddress()
         lastError = nil
         switch target.kind {
         case .airplay:
@@ -691,6 +748,7 @@ final class CastModel {
         sessionState = .closed
         castingName = nil
         playbackState = 0
+        refreshMacAddress()
     }
 
     private func handle(_ event: FCastEvent) {
@@ -755,6 +813,7 @@ final class CastModel {
             lastError = String(localized: "No network address found — are you on Wi-Fi?")
             return
         }
+        refreshMacAddress(ip)
         // The listener publishes its port asynchronously.
         Task {
             for _ in 0..<40 where server.port == 0 {
@@ -804,20 +863,33 @@ final class CastModel {
         }
     }
 
-    /// DLNA has no push updates — poll position while something plays.
+    /// DLNA has no push updates — poll position while something plays. The
+    /// loop must also end on its own: it used to keep a SOAP request going
+    /// every 2 s forever once the file finished or the TV was switched off,
+    /// because nothing but stop/disconnect ever cancelled it.
     private func startDLNAPolling(_ renderer: DLNARenderer) {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
+            var misses = 0
             while !Task.isCancelled {
                 if let info = await DLNAControl.positionInfo(renderer) {
-                    await MainActor.run {
-                        self?.playbackTime = info.position
-                        if info.duration > 0 { self?.playbackDuration = info.duration }
-                        if info.position > 0 {
-                            self?.awaitingFetch = false
-                            self?.firewallHint = false
-                        }
+                    guard let self else { return }
+                    misses = 0
+                    playbackTime = info.position
+                    if info.duration > 0 { playbackDuration = info.duration }
+                    if info.position > 0 {
+                        awaitingFetch = false
+                        firewallHint = false
                     }
+                    // Played to the end (within one poll interval of it).
+                    if info.duration > 0, info.position >= info.duration - 2 {
+                        playbackState = 0
+                        return
+                    }
+                } else {
+                    // Ten seconds of silence means the TV is gone, not busy.
+                    misses += 1
+                    if misses >= 5 { return }
                 }
                 try? await Task.sleep(for: .seconds(2))
             }
@@ -841,6 +913,9 @@ final class CastModel {
             case .dlna(let renderer):
                 if paused {
                     try? await DLNAControl.resume(renderer)
+                    // The poll ends itself at end-of-track; playing again
+                    // needs it back.
+                    startDLNAPolling(renderer)
                 } else {
                     try? await DLNAControl.pause(renderer)
                 }

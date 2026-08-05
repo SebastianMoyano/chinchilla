@@ -1,4 +1,5 @@
 import Foundation
+import DiskScanKit
 import StreamHostKit
 
 /// `Chinchilla gamestream-test` — starts the GameStream host and logs every
@@ -24,8 +25,13 @@ enum GameStreamDiagnostics {
     static func run(seconds: Int) async -> Int32 {
         log("== Chinchilla GameStream host ==")
         let host: GameStreamHost
+        // First launch mints an RSA-2048 identity via two openssl runs plus
+        // synchronous file I/O — blocking work, so it goes through
+        // Blocking.run like everything else instead of parking a
+        // cooperative-pool thread for the whole keygen.
+        let made = await Blocking.run { Result { try GameStreamHost() } }
         do {
-            host = try GameStreamHost()
+            host = try made.get()
         } catch {
             log("identity failed: \(error)")
             return 1

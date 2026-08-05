@@ -12,6 +12,11 @@ public enum RuleCatalog {
         "com.apple.iconservices.store", "GeoServices", "com.apple.GeoServices",
         "com.apple.Safari", "com.apple.WebKit.Networking", "com.apple.osanalytics",
         "Google", "Firefox", "Arc", "Microsoft Edge", "BraveSoftware",  // browser category owns these
+        // Developer rules below name these explicitly. Without the skip the
+        // caches.user glob sizes each tree a second time — Homebrew and
+        // go-build run to multiple GB — only for the path-dedupe in
+        // CleanScanner to throw one of the two results away.
+        "Yarn", "Homebrew", "org.swift.swiftpm", "CocoaPods", "pip", "go-build",
     ]
 
     static let appleCachesAllowlist: Set<String> = [

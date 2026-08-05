@@ -65,15 +65,44 @@ public struct CleanItem: Sendable, Identifiable, Hashable, Codable {
     public var name: String { (path as NSString).lastPathComponent }
 }
 
+/// A finished scan. Everything derived from the item list is computed once,
+/// here, because the alternative was computing it inside SwiftUI bodies: the
+/// Deep Clean screen walked the whole array six times to decide which category
+/// headers to show, then once more per header, then again for the totals — all
+/// of it repeated on every single render.
 public struct ScanReport: Sendable {
-    public var items: [CleanItem] = []
-    public var totalBytes: Int64 { items.reduce(0) { $0 + $1.size } }
+    public let items: [CleanItem]
+    public let totalBytes: Int64
+    private let byCategory: [CleanCategory: [CleanItem]]
+    private let byID: [String: CleanItem]
 
     public func items(in category: CleanCategory) -> [CleanItem] {
-        items.filter { $0.category == category }
+        byCategory[category] ?? []
+    }
+
+    /// Categories that actually found something, in catalog order.
+    public var populatedCategories: [CleanCategory] {
+        CleanCategory.allCases.filter { byCategory[$0] != nil }
+    }
+
+    /// Looking items up by id beats filtering the array for each one; the
+    /// selection can hold thousands of ids.
+    public func item(id: String) -> CleanItem? { byID[id] }
+
+    public func bytes(of ids: Set<String>) -> Int64 {
+        ids.reduce(0) { $0 + (byID[$1]?.size ?? 0) }
+    }
+
+    public func items(ids: Set<String>) -> [CleanItem] {
+        items.filter { ids.contains($0.id) }
     }
 
     public init(items: [CleanItem] = []) {
         self.items = items
+        self.totalBytes = items.reduce(0) { $0 + $1.size }
+        self.byCategory = Dictionary(grouping: items, by: \.category)
+        // The scanner dedupes by path, and id *is* the path — but a crash here
+        // would be a poor way to find out if that ever stopped being true.
+        self.byID = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     }
 }

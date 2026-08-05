@@ -61,6 +61,22 @@ final class UninstallerModel {
         return !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
     }
 
+    /// Launch Services icon lookups, kept per path. The row body asked for one
+    /// on every render, for every app in the list — a syscall per row per
+    /// frame, which is most of what made this screen feel stuck.
+    /// `@ObservationIgnored` is load-bearing: a row body reads this and then
+    /// writes it on a miss. Observed, that read-then-write during render is
+    /// precisely the invalidate→render→invalidate cycle this is meant to stop.
+    @ObservationIgnored private var iconCache: [String: NSImage] = [:]
+
+    func icon(for path: String) -> NSImage {
+        if let cached = iconCache[path] { return cached }
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        icon.size = NSSize(width: 32, height: 32)
+        iconCache[path] = icon
+        return icon
+    }
+
     func quit(_ app: InstalledApp) {
         guard let bundleID = app.bundleID else { return }
         for running in NSRunningApplication.runningApplications(withBundleIdentifier: bundleID) {
@@ -151,6 +167,26 @@ final class UninstallerModel {
     }
 
 
+    private nonisolated static func trashPaths(
+        _ paths: [String]
+    ) -> (trashed: Int, failures: [String]) {
+        var failures: [String] = []
+        var trashed = 0
+        for path in paths {
+            do {
+                try FileManager.default.trashItem(
+                    at: URL(fileURLWithPath: path), resultingItemURL: nil
+                )
+                trashed += 1
+            } catch {
+                failures.append(
+                    "\((path as NSString).lastPathComponent): \(error.localizedDescription)"
+                )
+            }
+        }
+        return (trashed, failures)
+    }
+
     /// Everything goes to Trash — uninstalling is always recoverable.
     func uninstall() {
         guard let app = inspecting, !uninstalling else { return }
@@ -161,19 +197,17 @@ final class UninstallerModel {
         uninstalling = true
         let paths = leftovers.filter { selectedLeftovers.contains($0.id) }.map(\.path)
             + (includeAppBundle ? [app.path] : [])
+        BusyDeadline.arm("Uninstaller.uninstall", .seconds(300)) { [weak self] in
+            self?.uninstalling ?? false
+        } clear: { [weak self] in self?.uninstalling = false }
         Task {
-            var failures: [String] = []
-            var trashed = 0
-            for path in paths {
-                do {
-                    try FileManager.default.trashItem(
-                        at: URL(fileURLWithPath: path), resultingItemURL: nil
-                    )
-                    trashed += 1
-                } catch {
-                    failures.append("\((path as NSString).lastPathComponent): \(error.localizedDescription)")
-                }
-            }
+            // Trashing a multi-gigabyte bundle is a long synchronous file
+            // operation. Left in this Task it ran on the main actor and the
+            // window was dead for the whole uninstall — the three sibling
+            // trash functions were moved off it and this one was missed.
+            let outcome = await Blocking.run { Self.trashPaths(paths) }
+            let failures = outcome.failures
+            let trashed = outcome.trashed
             uninstalling = false
             if failures.isEmpty {
                 lastResult = String(localized: "Moved \(trashed) items to Trash.")

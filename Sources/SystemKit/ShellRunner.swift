@@ -145,10 +145,20 @@ private final class OutputCollector: @unchecked Sendable {
         }
     }
 
+    /// Nothing this app runs has a legitimate reason to print megabytes, and
+    /// the timeout can be as long as 300 s (docker prune). Without a cap, a
+    /// child spewing output filled memory for the whole window; past the cap
+    /// we keep the head, which is where the error message is.
+    static let maxBytesPerStream = 4 * 1024 * 1024
+
     private func append(_ data: Data?, toOut: Bool) {
         lock.lock()
         if let data {
-            if toOut { out.append(data) } else { err.append(data) }
+            if toOut {
+                if out.count < Self.maxBytesPerStream { out.append(data) }
+            } else {
+                if err.count < Self.maxBytesPerStream { err.append(data) }
+            }
             lock.unlock()
             return
         }

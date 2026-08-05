@@ -2,6 +2,7 @@ import SwiftUI
 import Observation
 import AppKit
 import SystemKit
+import DiskScanKit
 
 /// Passive update check against GitHub Releases — no frameworks, no dialogs.
 /// When a newer version exists, MainWindow shows a quiet capsule up top that
@@ -190,8 +191,19 @@ final class UpdateModel {
         guard target.pathExtension == "app" else {
             throw UpdateError(reason: "not running from an app bundle")
         }
-        try FileManager.default.removeItem(at: target)
-        try FileManager.default.copyItem(at: URL(fileURLWithPath: newApp), to: target)
+        // Copying a whole app bundle is not main-thread work; done here it
+        // froze the window for the length of the swap, and looked like the
+        // update had hung.
+        let swap: Result<Void, Error> = await Blocking.run {
+            do {
+                try FileManager.default.removeItem(at: target)
+                try FileManager.default.copyItem(at: URL(fileURLWithPath: newApp), to: target)
+                return .success(())
+            } catch {
+                return .failure(error)
+            }
+        }
+        try swap.get()
 
         let relauncher = Process()
         relauncher.executableURL = URL(fileURLWithPath: "/bin/sh")

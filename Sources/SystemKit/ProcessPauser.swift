@@ -62,11 +62,42 @@ public enum ProcessPauser {
     /// freeze order). Returns nil if the root vanished.
     public static func pauseTree(pid: pid_t, bundleID: String, name: String) -> PausedProcess? {
         guard let start = startTime(of: pid) else { return nil }
-        for child in descendants(of: pid) {
+        // Refuse to freeze ourselves, or anything we are descended from.
+        // Today an allowlist upstream happens to prevent it; a SIGSTOP to our
+        // own pid is unrecoverable from inside the app — nothing is left
+        // running to send the SIGCONT — so the guard belongs at the syscall,
+        // not in the caller's good intentions.
+        guard !isSelfOrAncestor(pid) else { return nil }
+        for child in descendants(of: pid) where !isSelfOrAncestor(child) {
             kill(child, SIGSTOP)
         }
         kill(pid, SIGSTOP)
         return PausedProcess(pid: pid, startTime: start, bundleID: bundleID, name: name)
+    }
+
+    /// True if `pid` is this process or one of its ancestors — the two cases
+    /// where a SIGSTOP freezes us with no way back.
+    static func isSelfOrAncestor(_ pid: pid_t) -> Bool {
+        var current = getpid()
+        if pid == current { return true }
+        // Bounded: the ancestor chain ends at launchd (pid 1), but a bad
+        // read must not loop forever.
+        for _ in 0..<64 {
+            guard let parent = parentOf(current), parent > 0 else { return false }
+            if parent == pid { return true }
+            if parent == 1 { return false }
+            current = parent
+        }
+        return false
+    }
+
+    static func parentOf(_ pid: pid_t) -> pid_t? {
+        var info = proc_bsdinfo()
+        let size = MemoryLayout<proc_bsdinfo>.size
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(size)) == Int32(size) else {
+            return nil
+        }
+        return pid_t(info.pbi_ppid)
     }
 
     /// Parent first (so it can service children), then descendants.

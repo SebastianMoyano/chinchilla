@@ -200,7 +200,9 @@ final class GamingModel {
                 try? await Task.sleep(for: .seconds(600))
             }
         }
-        startSampling()
+        // Sampling follows what's visible, not the mode — nothing consumes
+        // the numbers while the screen and overlay are hidden.
+        updateSampling()
     }
 
     func deactivate() {
@@ -271,30 +273,66 @@ final class GamingModel {
 
     // MARK: Stats sampling
 
-    func startSampling() {
-        guard samplingTask == nil else { return }
-        samplingTask = Task {
-            while !Task.isCancelled {
-                let snap = sampler.sample()
-                snapshot = snap
-                if let cpu = snap.cpuUsage {
-                    cpuHistory.append(cpu)
-                    if cpuHistory.count > 60 { cpuHistory.removeFirst() }
+    /// How many views showing the live stats are on screen. Nothing but the
+    /// Gaming screen and the overlay ever reads these numbers, yet the loop
+    /// used to run for as long as gaming mode was active — a 1 Hz
+    /// host_statistics + IOKit GPU query burning cycles for a closed window.
+    private var statsViewers = 0
+
+    func statsViewerAppeared() {
+        statsViewers += 1
+        updateSampling()
+    }
+
+    func statsViewerDisappeared() {
+        statsViewers = max(0, statsViewers - 1)
+        updateSampling()
+    }
+
+    /// Starts or stops the loop to match whether anyone can see the numbers.
+    /// The loop samples before its first sleep, so a reappearing screen shows
+    /// data immediately instead of a blank tile for a second.
+    private func updateSampling() {
+        let wanted = statsViewers > 0 || overlayVisible
+        if wanted, samplingTask == nil {
+            samplingTask = Task {
+                while !Task.isCancelled {
+                    let snap = sampler.sample()
+                    snapshot = snap
+                    if let cpu = snap.cpuUsage {
+                        cpuHistory.append(cpu)
+                        if cpuHistory.count > 60 { cpuHistory.removeFirst() }
+                    }
+                    if let gpu = snap.gpuUtilization {
+                        gpuHistory.append(gpu)
+                        if gpuHistory.count > 60 { gpuHistory.removeFirst() }
+                    }
+                    try? await Task.sleep(for: .seconds(1))
                 }
-                if let gpu = snap.gpuUtilization {
-                    gpuHistory.append(gpu)
-                    if gpuHistory.count > 60 { gpuHistory.removeFirst() }
-                }
-                try? await Task.sleep(for: .seconds(1))
             }
+        } else if !wanted {
+            samplingTask?.cancel()
+            samplingTask = nil
         }
     }
 
-    func stopSampling() {
-        // Keep sampling while gaming mode or the overlay is alive.
-        guard !isActive, !overlayVisible else { return }
-        samplingTask?.cancel()
-        samplingTask = nil
+    // MARK: Shortcuts
+
+    /// Cached for the Focus pickers. `shortcuts list` spawns a process, and
+    /// the row used to run it on every appearance and throw the result away.
+    private(set) var availableShortcuts: [String] = []
+    private var shortcutsLoadedAt: Date?
+    private var loadingShortcuts = false
+
+    func loadShortcutsIfStale() {
+        if let shortcutsLoadedAt, Date().timeIntervalSince(shortcutsLoadedAt) < 300 { return }
+        guard !loadingShortcuts else { return }
+        loadingShortcuts = true
+        Task {
+            defer { loadingShortcuts = false }
+            availableShortcuts = await ShortcutsRunner.list()
+            shortcutsLoadedAt = Date()
+        }
     }
 
     // MARK: Overlay
@@ -304,7 +342,6 @@ final class GamingModel {
     }
 
     private func showOverlay() {
-        startSampling()
         if overlayPanel == nil {
             let panel = NSPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 240, height: 130),
@@ -330,11 +367,12 @@ final class GamingModel {
         }
         overlayPanel?.orderFrontRegardless()
         overlayVisible = true
+        updateSampling()
     }
 
     private func hideOverlay() {
         overlayPanel?.orderOut(nil)
         overlayVisible = false
-        stopSampling()
+        updateSampling()
     }
 }

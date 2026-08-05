@@ -15,39 +15,26 @@ struct MainWindow: View {
         .sheet(isPresented: $showOnboarding) {
             OnboardingView(isPresented: $showOnboarding)
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                if appState.updates.installPhase == .downloading
-                    || appState.updates.installPhase == .installing {
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.small)
-                        Text(appState.updates.installPhase == .downloading ? "Downloading…" : "Installing…")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                } else if let version = appState.updates.availableVersion {
-                    // Passive capsule; one click downloads, verifies,
-                    // installs and relaunches — no dialogs ever.
-                    Button {
-                        appState.updates.installUpdate()
-                    } label: {
-                        Label("Update to \(version)", systemImage: "arrow.down.circle.fill")
-                            .font(.callout.weight(.medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(.green.opacity(0.15), in: Capsule())
-                            .foregroundStyle(.green)
-                    }
-                    .buttonStyle(.plain)
-                    .help("One click: downloads the new version, verifies its signature, installs it and relaunches. No rush.")
-                } else if let result = appState.updates.manualResult {
-                    Text(verbatim: result)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+        // Two rules here, both learned from a sample of the app frozen at
+        // 100% of a core with not one frame of our own code on the stack:
+        //
+        // 1. The item set never changes. It used to be an if/else-if chain
+        //    that swapped a progress view for a capsule button for a label,
+        //    so every update rebuilt the toolbar's items. Now there are
+        //    always exactly two items with fixed ids, and only what's *inside*
+        //    them changes.
+        // 2. Nothing in a toolbar item is custom-styled. AppKit builds a menu
+        //    form representation for each item, and for a custom label that
+        //    means re-resolving its image through CUICatalog — locale fallback
+        //    and all — on every pass. That resolution alone was a quarter of
+        //    the frozen CPU.
+        .toolbar(id: "main") {
+            ToolbarItem(id: "update", placement: .primaryAction) {
+                UpdateToolbarItem()
+            }
+            ToolbarItem(id: "sponsor", placement: .primaryAction) {
                 Link(destination: UpdateModel.sponsorURL) {
-                    Label("Sponsor", systemImage: "heart.fill")
-                        .foregroundStyle(.pink)
+                    Label("Sponsor", systemImage: "heart")
                 }
                 .help("Enjoying Chinchilla? Support its development ♥")
             }
@@ -67,11 +54,51 @@ struct MainWindow: View {
         case .deepClean: DeepCleanView()
         case .uninstaller: UninstallerView()
         case .diskAnalyzer: DiskAnalyzerView()
+        case .memory: MemoryView()
         case .gaming: GamingModeView()
         case .startup: StartupView()
         case .health: HealthView()
         case .cast: CastView()
         case .devTools: DevToolsView()
+        }
+    }
+}
+
+/// The update state, as one toolbar item that always exists. Keeping the item
+/// itself constant is the point: SwiftUI rebuilds AppKit's toolbar whenever the
+/// set of items changes, and that rebuild is what the app was drowning in.
+private struct UpdateToolbarItem: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        let updates = appState.updates
+        switch updates.installPhase {
+        case .downloading, .installing:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(updates.installPhase == .downloading ? "Downloading…" : "Installing…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        default:
+            if let version = updates.availableVersion {
+                // One click downloads, verifies, installs and relaunches —
+                // no dialogs ever.
+                Button {
+                    updates.installUpdate()
+                } label: {
+                    Label("Update to \(version)", systemImage: "arrow.down.circle")
+                }
+                .help("One click: downloads the new version, verifies its signature, installs it and relaunches. No rush.")
+            } else if let result = updates.manualResult {
+                Text(verbatim: result)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                // Something has to occupy the slot, or the item set changes
+                // again the moment an update appears.
+                Color.clear.frame(width: 0, height: 0)
+            }
         }
     }
 }

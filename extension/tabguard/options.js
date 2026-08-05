@@ -16,14 +16,40 @@ async function load() {
   document.getElementById("allowlist").value = merged.allowlist.join(", ");
 }
 
+// People paste full URLs here; the matcher compares hostnames, so anything
+// not reduced to one would never match and the exclusion would fail silently.
+function toHostname(entry) {
+  const s = entry.trim().toLowerCase();
+  if (!s) return "";
+  for (const candidate of [s, "https://" + s]) {
+    try {
+      const host = new URL(candidate).hostname;
+      if (host) return host;
+    } catch {}
+  }
+  return "";
+}
+
 async function save() {
   const settings = {};
   for (const field of fields) {
     const el = document.getElementById(field);
-    settings[field] = el.type === "checkbox" ? el.checked : Number(el.value);
+    if (el.type === "checkbox") {
+      settings[field] = el.checked;
+      continue;
+    }
+    // An empty or garbled field must not become 0 (which would sleep every
+    // tab within a minute) or NaN (which silently disables the feature).
+    let value = el.value.trim() === "" ? NaN : Number(el.value);
+    if (!Number.isFinite(value)) value = DEFAULT_SETTINGS[field];
+    value = Math.min(Number(el.max), Math.max(Number(el.min), Math.round(value)));
+    el.value = value;
+    settings[field] = value;
   }
-  settings.allowlist = document.getElementById("allowlist").value
-    .split(",").map((s) => s.trim()).filter(Boolean);
+  const allowlistEl = document.getElementById("allowlist");
+  settings.allowlist = allowlistEl.value.split(",").map(toHostname).filter(Boolean);
+  // Write the cleaned-up list back so the user sees what actually took effect.
+  allowlistEl.value = settings.allowlist.join(", ");
 
   if (settings.pauseVideosWhileGaming) {
     const granted = await chrome.permissions.request({ origins: ["<all_urls>"] });

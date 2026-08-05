@@ -1,16 +1,24 @@
 import Foundation
 import Darwin
 
+/// A (device, inode) pair as a set key. Used to be an interpolated
+/// "\(dev):\(ino)" string — one allocation plus a character-wise hash per
+/// hardlinked file, paid behind the registry's shared lock.
+struct HardlinkKey: Hashable, Sendable {
+    let dev: Int32
+    let ino: UInt64
+}
+
 /// Shared (device, inode) registry so hardlinked files are counted once
 /// even when several walkers scan sibling subtrees in parallel.
 public final class HardlinkRegistry: Sendable {
-    private let seen = Locked<Set<String>>([])
+    private let seen = Locked<Set<HardlinkKey>>([])
 
     public init() {}
 
     /// Returns true the first time a (dev, inode) pair is seen.
     public func firstSighting(dev: Int32, ino: UInt64) -> Bool {
-        seen.withLock { $0.insert("\(dev):\(ino)").inserted }
+        seen.withLock { $0.insert(HardlinkKey(dev: dev, ino: ino)).inserted }
     }
 }
 

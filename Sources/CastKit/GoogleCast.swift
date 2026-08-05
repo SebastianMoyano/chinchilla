@@ -184,10 +184,18 @@ public actor GoogleCastSession {
             startHeartbeat()
             continuation?.yield(.state(.ready))
         case .failed(let error):
+            // A connection that failed is not one to keep pinging, and the
+            // event stream has to end or its consumers wait forever.
+            heartbeat?.cancel()
+            heartbeat = nil
             continuation?.yield(.error(String(describing: error)))
             continuation?.yield(.state(.closed))
+            continuation?.finish()
         case .cancelled:
+            heartbeat?.cancel()
+            heartbeat = nil
             continuation?.yield(.state(.closed))
+            continuation?.finish()
         default:
             break
         }
@@ -237,7 +245,15 @@ public actor GoogleCastSession {
             }
         }
         if isComplete || error != nil {
+            // A remote FIN or receive error arrives with the connection still
+            // "ready", so the failed/cancelled cleanup never runs. Without the
+            // same teardown here, the heartbeat kept pinging a half-closed
+            // socket and event consumers waited on the stream forever.
+            heartbeat?.cancel()
+            heartbeat = nil
+            connection.cancel()
             continuation?.yield(.state(.closed))
+            continuation?.finish()
             return
         }
         receiveLoop()
@@ -332,7 +348,11 @@ public actor GoogleCastSession {
         heartbeat = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(5))
-                await self?.ping()
+                // `await self?.ping()` on its own kept the loop alive after the
+                // session was gone: a failed cast left a task pinging nothing,
+                // every five seconds, for as long as the app ran.
+                guard let self else { return }
+                await self.ping()
             }
         }
     }

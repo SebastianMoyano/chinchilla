@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import DiskScanKit
 import IOKit
 
 public enum MemoryPressureLevel: Int, Sendable {
@@ -7,6 +8,27 @@ public enum MemoryPressureLevel: Int, Sendable {
     case warning = 2
     case critical = 4
     case unknown = 0
+
+    /// Stable name for anything written to disk. The integers are the
+    /// kernel's, and storing those in a log would tie the file format to a
+    /// header we don't control.
+    public var name: String {
+        switch self {
+        case .normal: "normal"
+        case .warning: "warning"
+        case .critical: "critical"
+        case .unknown: "unknown"
+        }
+    }
+
+    public init(name: String) {
+        switch name {
+        case "normal": self = .normal
+        case "warning": self = .warning
+        case "critical": self = .critical
+        default: self = .unknown
+        }
+    }
 }
 
 public struct SystemSnapshot: Sendable {
@@ -113,28 +135,56 @@ public final class SystemSampler {
         return Int64(swap.xsu_used)
     }
 
+    /// The accelerator that publishes the statistic, matched once and kept
+    /// retained. This runs on 1 Hz timers, and re-matching services plus
+    /// copying the accelerator's entire property table every second is real
+    /// work for one integer; the entry itself outlives us, so per call we
+    /// only ask it for the one statistics dictionary. Never released while
+    /// cached — only when swapped out for a fresh match.
+    private static let cachedAccelerator = Locked<io_registry_entry_t>(0)
+
     /// Undocumented-but-stable IOAccelerator statistic on Apple Silicon.
     /// Returns nil (hiding the stat) if the key ever changes.
     public static func gpuUtilization() -> Double? {
+        cachedAccelerator.withLock { entry -> Double? in
+            if entry != 0 {
+                if let value = deviceUtilization(of: entry) { return value }
+                // The cached entry can go stale (GPU driver restart, sleep
+                // cycles): drop it and re-match once before giving up.
+                IOObjectRelease(entry)
+                entry = 0
+            }
+            entry = matchAccelerator()
+            guard entry != 0 else { return nil }
+            return deviceUtilization(of: entry)
+        }
+    }
+
+    /// Just the statistics dictionary — not the whole property table.
+    private static func deviceUtilization(of entry: io_registry_entry_t) -> Double? {
+        guard let raw = IORegistryEntryCreateCFProperty(
+            entry, "PerformanceStatistics" as CFString, kCFAllocatorDefault, 0
+        )?.takeRetainedValue(),
+              let perf = raw as? [String: Any],
+              let utilization = perf["Device Utilization %"] as? Int else { return nil }
+        return min(1, max(0, Double(utilization) / 100))
+    }
+
+    /// The first accelerator that answers with the statistic we want, still
+    /// retained — the caller owns (and caches) it.
+    private static func matchAccelerator() -> io_registry_entry_t {
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(
             kIOMainPortDefault, IOServiceMatching("IOAccelerator"), &iterator
-        ) == KERN_SUCCESS else { return nil }
+        ) == KERN_SUCCESS else { return 0 }
         defer { IOObjectRelease(iterator) }
 
         var entry = IOIteratorNext(iterator)
         while entry != 0 {
-            var props: Unmanaged<CFMutableDictionary>?
-            let ok = IORegistryEntryCreateCFProperties(entry, &props, kCFAllocatorDefault, 0)
+            if deviceUtilization(of: entry) != nil { return entry }
             IOObjectRelease(entry)
-            if ok == KERN_SUCCESS,
-               let dict = props?.takeRetainedValue() as? [String: Any],
-               let perf = dict["PerformanceStatistics"] as? [String: Any],
-               let utilization = perf["Device Utilization %"] as? Int {
-                return min(1, max(0, Double(utilization) / 100))
-            }
             entry = IOIteratorNext(iterator)
         }
-        return nil
+        return 0
     }
 }

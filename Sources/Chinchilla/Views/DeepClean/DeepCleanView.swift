@@ -38,6 +38,7 @@ extension Safety {
 struct DeepCleanView: View {
     @Environment(AppState.self) private var appState
     @State private var showExclusions = false
+    @State private var confirmingClean = false
 
     var body: some View {
         let model = appState.deepClean
@@ -129,7 +130,12 @@ struct DeepCleanView: View {
                 ProgressView().controlSize(.small)
             }
             Button {
-                model.clean()
+                // Preview deletes nothing; only the real clean needs a stop.
+                if model.dryRun {
+                    model.clean()
+                } else {
+                    confirmingClean = true
+                }
             } label: {
                 Label(
                     model.dryRun ? "Preview Clean" : "Clean Now",
@@ -140,9 +146,40 @@ struct DeepCleanView: View {
             .buttonStyle(.borderedProminent)
             .tint(model.dryRun ? .blue : .purple)
             .disabled(model.selectedItems.isEmpty || model.phase == .cleaning)
+            .confirmationDialog(
+                cleanConfirmTitle(model),
+                isPresented: $confirmingClean,
+                titleVisibility: .visible
+            ) {
+                let anyPermanent = model.selectedItems.contains { $0.deleteMode == .unlink }
+                Button(anyPermanent ? "Delete" : "Move to Trash", role: .destructive) {
+                    model.clean()
+                }
+            } message: {
+                cleanConfirmMessage(model)
+            }
         }
         .padding(14)
         .background(.bar)
+    }
+
+    private func cleanConfirmTitle(_ model: DeepCleanModel) -> Text {
+        Text("Remove \(model.selectedItems.count) items (\(Text(model.selectedBytes, format: .byteCount(style: .file))))?")
+    }
+
+    /// Most rules unlink (caches and logs never pass through the Trash);
+    /// a few trash. The dialog is where the user learns which is which.
+    private func cleanConfirmMessage(_ model: DeepCleanModel) -> Text {
+        let items = model.selectedItems
+        let toTrash = items.count { $0.deleteMode == .trash }
+        let permanent = items.count - toTrash
+        if permanent == 0 {
+            return Text("Everything goes to the Trash — you can put it back.")
+        }
+        if toTrash == 0 {
+            return Text("These are deleted permanently — they don't go through the Trash.")
+        }
+        return Text("\(toTrash) items go to the Trash and can be put back. The other \(permanent) are deleted permanently.")
     }
 
     // MARK: Summary
@@ -212,8 +249,10 @@ private struct CategorySection: View {
 
     var body: some View {
         let items = model.report.items(in: category)
-        let selectedCount = items.count { model.selected.contains($0.id) }
-        let bytes = items.reduce(Int64(0)) { $0 + $1.size }
+        // Derived in the model when the report or selection changes — the
+        // per-render reduces here made every checkbox toggle cost O(all items).
+        let selectedCount = model.selectedCount(in: category)
+        let bytes = model.totalBytes(in: category)
 
         Section {
             ForEach(items.prefix(60)) { item in

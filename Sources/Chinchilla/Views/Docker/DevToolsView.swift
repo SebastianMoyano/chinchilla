@@ -23,7 +23,11 @@ struct DevToolsView: View {
             if model.artifacts.isEmpty, !model.artifactsScanning { model.scanArtifacts() }
         }
         .confirmationDialog(
-            "This removes data Docker will have to re-download or rebuild.",
+            // Volumes hold data (databases, uploads) that nothing re-creates;
+            // images re-download. Two different risks, two different dialogs.
+            confirmingAction == .volumes
+                ? "Delete unused Docker volumes? The data inside them is lost for good — it is not re-downloaded or rebuilt."
+                : "Delete every image no container uses? They re-download or rebuild on next run.",
             isPresented: Binding(
                 get: { confirmingAction != nil },
                 set: { if !$0 { confirmingAction = nil } }
@@ -31,7 +35,10 @@ struct DevToolsView: View {
             titleVisibility: .visible
         ) {
             if let action = confirmingAction {
-                Button(action == .volumes ? "Delete Unused Volumes" : "Prune", role: .destructive) {
+                Button(
+                    action == .volumes ? "Delete Volumes Permanently" : "Delete Unused Images",
+                    role: .destructive
+                ) {
                     model.prune(action)
                     confirmingAction = nil
                 }

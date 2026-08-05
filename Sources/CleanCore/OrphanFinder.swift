@@ -58,6 +58,11 @@ public struct InstalledIndex: Sendable {
     /// their bundle id and leave the old prefs behind (`com.x.thing` →
     /// `net.y.thing`); the app is still installed, so that is not an orphan.
     public var appIDLeaves: Set<String> = []
+    /// `known + "."` for every identifier, precomputed. `covers` runs once
+    /// per directory entry across nine roots; building these strings inside
+    /// its loop was two allocations per identifier per call — millions of
+    /// throwaway strings per scan.
+    private var identifierPrefixes: [String] = []
 
     public init(
         identifiers: Set<String> = [], publishers: Set<String> = [],
@@ -67,20 +72,27 @@ public struct InstalledIndex: Sendable {
         self.publishers = publishers
         self.appNames = appNames
         self.appIDLeaves = appIDLeaves
+        self.identifierPrefixes = identifiers.map { $0 + "." }
     }
 
-    /// Recomputes `publishers` from `identifiers` — call after filling the set.
+    /// Recomputes `publishers` (and the prefix cache `covers` matches
+    /// against) from `identifiers` — call after filling the set.
     mutating func indexPublishers() {
         for id in identifiers {
             if let publisher = OrphanFinder.publisher(of: id) { publishers.insert(publisher) }
         }
+        identifierPrefixes = identifiers.map { $0 + "." }
     }
 
     /// True when `bundleID` can be attributed to something still on the Mac.
     public func covers(_ bundleID: String) -> Bool {
         let id = bundleID.lowercased()
         if identifiers.contains(id) { return true }
-        for known in identifiers where id.hasPrefix(known + ".") || known.hasPrefix(id + ".") {
+        // `prefix.hasPrefix(idDot)` matches the old `known.hasPrefix(idDot)`:
+        // they only differ when `known == id`, which the exact-match check
+        // above has already answered.
+        let idDot = id + "."
+        for prefix in identifierPrefixes where id.hasPrefix(prefix) || prefix.hasPrefix(idDot) {
             return true
         }
         if let publisher = OrphanFinder.publisher(of: id), publishers.contains(publisher) {
@@ -180,7 +192,13 @@ public enum OrphanFinder {
 
     /// Full scan: index what is installed, walk the leftover folders, size
     /// what survives. Every blocking step runs off the cooperative pool.
-    public static func scan(options: Options = Options()) async -> [Orphan] {
+    /// `isCancelled` reaches the sizing fts loops inside `Blocking.run`,
+    /// where `Task.isCancelled` never fires — pass a `CancelFlag` probe so an
+    /// abandoned scan actually stops walking.
+    public static func scan(
+        options: Options = Options(),
+        isCancelled: (@Sendable () -> Bool)? = nil
+    ) async -> [Orphan] {
         let index = await Blocking.run { buildIndex() }
         var candidates = await Blocking.run { collect(index: index, options: options) }
         // Second pass: the bytes usually sit in a plainly named folder
@@ -195,7 +213,10 @@ public enum OrphanFinder {
         await withTaskGroup(of: (String, OrphanFile)?.self) { group in
             for candidate in candidates {
                 group.addTask {
-                    let size = await Blocking.run { DiskSize.allocated(at: candidate.path) }
+                    if isCancelled?() == true { return nil }
+                    let size = await Blocking.run {
+                        DiskSize.allocated(at: candidate.path, isCancelled: isCancelled)
+                    }
                     guard size > 0 else { return nil }
                     return (
                         candidate.bundleID,
