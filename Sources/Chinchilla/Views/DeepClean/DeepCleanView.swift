@@ -37,7 +37,6 @@ extension Safety {
 
 struct DeepCleanView: View {
     @Environment(AppState.self) private var appState
-    @State private var showExclusions = false
     @State private var confirmingClean = false
 
     var body: some View {
@@ -64,15 +63,9 @@ struct DeepCleanView: View {
             }
         }
         .navigationTitle("Deep Clean")
-        .toolbar {
-            Button {
-                showExclusions = true
-            } label: {
-                Label("Protected Folders", systemImage: "lock.shield")
-            }
-            .help("Folders Chinchilla will never touch")
-        }
-        .sheet(isPresented: $showExclusions) { ExclusionsView() }
+        // The Protected Folders button lives in MainWindow's constant
+        // toolbar: per-screen `.toolbar` items changed the window's item set
+        // on every tab switch, and that rebuild is the documented freeze.
     }
 
     private func idleView(_ model: DeepCleanModel) -> some View {

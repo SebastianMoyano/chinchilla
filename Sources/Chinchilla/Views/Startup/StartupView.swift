@@ -19,14 +19,8 @@ struct StartupView: View {
             .padding(24)
         }
         .navigationTitle("Startup")
-        .toolbar {
-            Button {
-                model.refresh()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .disabled(model.loading)
-        }
+        // Refresh lives in MainWindow's constant toolbar — see
+        // ScreenToolbarItem for why screens don't add their own items.
         .onAppear {
             if model.agents.isEmpty { model.refresh() }
         }

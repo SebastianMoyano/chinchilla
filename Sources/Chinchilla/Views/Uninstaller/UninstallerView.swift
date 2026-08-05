@@ -37,14 +37,8 @@ struct UninstallerView: View {
             }
         }
         .navigationTitle("Uninstaller")
-        .toolbar {
-            Button {
-                model.scan()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .disabled(model.scanning)
-        }
+        // Rescan lives in MainWindow's constant toolbar — see
+        // ScreenToolbarItem for why screens don't add their own items.
         .onAppear {
             if model.apps.isEmpty { model.scan() }
         }

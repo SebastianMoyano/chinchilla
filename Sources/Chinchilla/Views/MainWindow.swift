@@ -29,6 +29,9 @@ struct MainWindow: View {
         //    and all — on every pass. That resolution alone was a quarter of
         //    the frozen CPU.
         .toolbar(id: "main") {
+            ToolbarItem(id: "screen", placement: .primaryAction) {
+                ScreenToolbarItem()
+            }
             ToolbarItem(id: "update", placement: .primaryAction) {
                 UpdateToolbarItem()
             }
@@ -60,6 +63,57 @@ struct MainWindow: View {
         case .health: HealthView()
         case .cast: CastView()
         case .devTools: DevToolsView()
+        }
+    }
+}
+
+/// The per-screen action, as one toolbar item that always exists — the same
+/// rule as UpdateToolbarItem below. Four screens used to attach their own
+/// `.toolbar { Button }`, so switching tabs changed the window's item set,
+/// AppKit rebuilt the whole toolbar, and the rebuild locked into the exact
+/// menu-form-representation loop this toolbar was already reworked once to
+/// escape. One constant item whose *contents* switch on the tab keeps the
+/// set stable; a bare symbol image keeps the menu-form representation cheap.
+private struct ScreenToolbarItem: View {
+    @Environment(AppState.self) private var appState
+    @State private var showExclusions = false
+
+    var body: some View {
+        switch appState.selection {
+        case .deepClean:
+            Button {
+                showExclusions = true
+            } label: {
+                Image(systemName: "lock.shield")
+            }
+            .help("Protected Folders — folders Chinchilla will never touch")
+            .accessibilityLabel("Protected Folders")
+            .sheet(isPresented: $showExclusions) { ExclusionsView() }
+        case .health:
+            Button {
+                appState.health.refresh()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .disabled(appState.health.loading)
+        case .uninstaller:
+            Button {
+                appState.uninstaller.scan()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .disabled(appState.uninstaller.scanning)
+        case .startup:
+            Button {
+                appState.startup.refresh()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .disabled(appState.startup.loading)
+        default:
+            // Something has to occupy the slot, or the item set changes
+            // the moment a screen with an action appears.
+            Color.clear.frame(width: 0, height: 0)
         }
     }
 }
