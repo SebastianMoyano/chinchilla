@@ -66,6 +66,24 @@ public final class RealtimeH264Encoder: @unchecked Sendable {
         VTCompressionSessionPrepareToEncodeFrames(session)
     }
 
+    /// Changes the target bitrate live — the low-latency rate controller
+    /// reacts within a frame or two, so a session rebuild (and the IDR it
+    /// would cost) is only needed when the *resolution* changes.
+    public func setBitrate(_ bitrate: Int) {
+        lock.lock()
+        let session = self.session
+        lock.unlock()
+        guard let session else { return }
+        VTSessionSetProperty(
+            session, key: kVTCompressionPropertyKey_AverageBitRate,
+            value: bitrate as CFNumber
+        )
+        VTSessionSetProperty(
+            session, key: kVTCompressionPropertyKey_DataRateLimits,
+            value: [bitrate / 8 * 2, 1] as CFArray
+        )
+    }
+
     /// Asks for an IDR on the next frame — used when the receiver reports it
     /// lost too much to recover, and once at the start of a session.
     public func requestKeyFrame() {

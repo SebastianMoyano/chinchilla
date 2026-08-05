@@ -75,6 +75,8 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
     private let videoQueue = DispatchQueue(label: "cast.capture.video")
     private let audioQueue = DispatchQueue(label: "cast.capture.audio")
     private var stream: SCStream?
+    /// Kept so adaptive quality can rescale the running capture.
+    private var configuration: SCStreamConfiguration?
     private var segmenter: HLSSegmenter?
     public private(set) var isRunning = false
     /// Set when the stream dies on its own (display disconnected, etc.).
@@ -317,7 +319,22 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
             try await boxed.value.startCapture()
         }
         self.stream = stream
+        self.configuration = configuration
         isRunning = true
+    }
+
+    /// Rescales the running capture output — SCStream scales the same source
+    /// to the new size without restarting, so adaptive quality can move
+    /// between resolutions with no gap in frames. The filter, audio and
+    /// frame rate stay as negotiated.
+    public func updateCaptureSize(width: Int, height: Int) async {
+        guard isRunning, let stream, let configuration else { return }
+        configuration.width = width
+        configuration.height = height
+        let boxed = Unchecked((stream, configuration))
+        try? await withTimeout(.seconds(5), "Screen capture") {
+            try await boxed.value.0.updateConfiguration(boxed.value.1)
+        }
     }
 
     public func stop() async {
@@ -340,6 +357,7 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
             }
         }
         stream = nil
+        configuration = nil
         // Unplug the extra desktop; windows on it move back to the real one.
         virtualDisplay?.invalidate()
         virtualDisplay = nil

@@ -156,6 +156,13 @@ final class CastModel {
     /// Chrome uses for "Cast desktop". Nothing extra to install; it just
     /// negotiates a delay instead of buffering like a media player.
     var mirrorFastPath = true
+    /// Let the stream follow the Wi-Fi: the quality picker becomes a ceiling
+    /// and the session steps down (and back up) as the RTCP feedback says the
+    /// link is choking or has recovered.
+    var adaptiveMirrorQuality = true
+    /// What the ladder is currently sending, e.g. "1080p · 6 Mbps" — nil when
+    /// not mirroring on the fast path or when adaptation is off.
+    private(set) var mirrorQualityStatus: String?
     /// How long the TV holds frames before showing them. Lower is more
     /// responsive; too low and a jittery Wi-Fi network starts to stutter.
     var mirrorDelayMs = 400 {
@@ -346,12 +353,19 @@ final class CastModel {
                 let fast = CastMirrorSession(
                     host: device.host, quality: mirrorQuality,
                     includeAudio: mirrorAudio, source: mirrorSource,
-                    extendedSide: extendedSide, playoutDelayMs: mirrorDelayMs
+                    extendedSide: extendedSide, playoutDelayMs: mirrorDelayMs,
+                    adaptive: adaptiveMirrorQuality
                 )
                 fast.onStopped = { [weak self] message in
                     Task { @MainActor in
                         self?.mirroring = false
+                        self?.mirrorQualityStatus = nil
                         if let message { self?.mirrorError = message }
+                    }
+                }
+                if adaptiveMirrorQuality {
+                    fast.onQualityChange = { [weak self] rung in
+                        Task { @MainActor in self?.mirrorQualityStatus = rung.label }
                     }
                 }
                 do {
@@ -505,6 +519,7 @@ final class CastModel {
         mirrorGeneration += 1
         mirroring = false
         castingName = nil
+        mirrorQualityStatus = nil
         playbackState = 0
         let target = connected
         let fast = fastMirror

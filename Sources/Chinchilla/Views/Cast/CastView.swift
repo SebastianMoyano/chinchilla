@@ -487,9 +487,17 @@ struct MirrorCard: View {
                     .pickerStyle(.segmented)
                     .fixedSize()
                     .disabled(model.mirroring)
-                    .help(model.mirroring
-                          ? String(localized: "Resolution is agreed with the TV when the stream starts — stop to change it.")
+                    .help(model.adaptiveMirrorQuality
+                          ? String(localized: "The best quality the stream will try. If the Wi-Fi can't keep up, it steps down on its own.")
                           : String(localized: "How sharp the picture is."))
+                    Toggle(isOn: Binding(
+                        get: { model.adaptiveMirrorQuality },
+                        set: { model.adaptiveMirrorQuality = $0 }
+                    )) {
+                        Text("Adapt to Wi-Fi")
+                    }
+                    .toggleStyle(.checkbox)
+                    .help("Watches how the TV is receiving the stream and lowers the quality before it stutters — then climbs back when the network recovers. Only the fast Chromecast path can do this; the picker above becomes the ceiling.")
                     Spacer()
                 }
 
@@ -553,6 +561,16 @@ struct MirrorCard: View {
                 Label("This TV wouldn't take the fast stream, so we're using the slower one. Expect a second or two of delay.", systemImage: "tortoise")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            if model.mirroring, let status = model.mirrorQualityStatus {
+                Label {
+                    Text("Adapting to your Wi-Fi — now sending \(status)")
+                } icon: {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             if let error = model.mirrorError {

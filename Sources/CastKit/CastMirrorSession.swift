@@ -44,10 +44,26 @@ public final class CastMirrorSession: @unchecked Sendable {
     private var session: GoogleCastSession?
     private var transport: CastStreamTransport?
     private var sender: CastStreamSender?
-    private var encoder: RealtimeH264Encoder?
+    /// The encoder lives behind a lock because adaptive quality replaces it
+    /// mid-stream (a resolution change needs a new VTCompressionSession) while
+    /// the capture queue is reading it. Everyone — capture callback, key-frame
+    /// requests, the swap itself — goes through this one box.
+    private let activeEncoder = Locked<RealtimeH264Encoder?>(nil)
     private var audioSender: CastStreamSender?
     private var audioEncoder: OpusAudioEncoder?
     private var streamer: ScreenStreamer?
+
+    // MARK: Adaptive quality
+    /// Whether the ladder runs at all; chosen before the stream starts.
+    public let adaptive: Bool
+    /// The capture size at the ceiling quality — rung sizes scale from it so
+    /// aspect is preserved for windows and odd-shaped displays.
+    private let baseSize = Locked<(width: Int, height: Int)?>(nil)
+    private let currentRung = Locked<QualityRung?>(nil)
+    private var monitorTask: Task<Void, Never>?
+    /// Fires whenever the ladder moves (and once at start), off the main
+    /// actor — hop before touching UI state.
+    public var onQualityChange: (@Sendable (QualityRung) -> Void)?
 
     /// Called when the stream dies on its own.
     public var onStopped: (@Sendable (String?) -> Void)?
@@ -58,7 +74,8 @@ public final class CastMirrorSession: @unchecked Sendable {
         frameRate: Int = 30, includeAudio: Bool = true,
         source: MirrorSource = .wholeScreen,
         extendedSide: ExtendedSide = .right,
-        playoutDelayMs: Int = CastStreaming.defaultTargetDelayMs
+        playoutDelayMs: Int = CastStreaming.defaultTargetDelayMs,
+        adaptive: Bool = true
     ) {
         self.host = host
         self.quality = quality
@@ -67,6 +84,7 @@ public final class CastMirrorSession: @unchecked Sendable {
         self.source = source
         self.extendedSide = extendedSide
         self.playoutDelayMs = playoutDelayMs
+        self.adaptive = adaptive
     }
 
     /// Every failure past the first allocation has to give the resources back.
@@ -163,9 +181,19 @@ public final class CastMirrorSession: @unchecked Sendable {
             initialPlayoutDelayMs: playoutDelayMs
         )
         sender.onLog = onLog
-        sender.onKeyFrameRequest = { [weak encoder] in encoder?.requestKeyFrame() }
+        // Through the box, not the encoder itself: after an adaptive
+        // resolution switch the request must reach the *current* encoder.
+        let activeEncoder = self.activeEncoder
+        sender.onKeyFrameRequest = {
+            activeEncoder.withLock { $0 }?.requestKeyFrame()
+        }
         sender.start()
         encoder.onSample = { [weak sender] sample in sender?.send(sample) }
+        activeEncoder.withLock { $0 = encoder }
+        baseSize.withLock { $0 = size }
+        currentRung.withLock {
+            $0 = QualityRung(quality: quality, bitrate: sealed.videoBitRate)
+        }
 
         // Audio rides a second RTP stream: its own SSRC, its own keys, and a
         // 48 kHz timebase instead of video's 90 kHz.
@@ -186,10 +214,12 @@ public final class CastMirrorSession: @unchecked Sendable {
         }
 
         let streamer = ScreenStreamer()
-        // Capture the encoders directly rather than reaching through `self`:
-        // these fire on the capture queues, and `stop()` clears those
-        // properties from another thread.
-        streamer.onVideoSample = { [weak encoder] buffer in encoder?.encode(buffer) }
+        // Capture the encoder box rather than reaching through `self`: the
+        // callback fires on the capture queue while `stop()` — and adaptive
+        // resolution switches — replace the encoder from another thread.
+        streamer.onVideoSample = { buffer in
+            activeEncoder.withLock { $0 }?.encode(buffer)
+        }
         if let audioEncoder {
             let gate = sendAudio
             streamer.onAudioSample = { [weak audioEncoder] buffer in
@@ -203,9 +233,84 @@ public final class CastMirrorSession: @unchecked Sendable {
             source: source, extendedSide: extendedSide
         )
 
-        self.encoder = encoder
         self.sender = sender
         self.streamer = streamer
+
+        if adaptive {
+            startAdaptiveMonitor(sender: sender)
+        }
+        if let rung = currentRung.withLock({ $0 }) {
+            onQualityChange?(rung)
+        }
+    }
+
+    // MARK: Adaptive quality
+
+    /// The stream is the probe: once a second, read the RTCP-fed stats deltas
+    /// and let the controller move the ladder. Ends with the session — the
+    /// task holds everything weakly and exits when the sender goes away.
+    private func startAdaptiveMonitor(sender: CastStreamSender) {
+        let ladder = AdaptiveQuality.ladder(ceiling: quality)
+        guard ladder.count > 1 else { return }
+        monitorTask = Task { [weak self, weak sender] in
+            var controller = AdaptiveRateController(ladder: ladder)
+            var last = CastStreamSender.Stats()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled, let sender else { return }
+                let stats = sender.currentStats()
+                let sent = stats.packetsSent - last.packetsSent
+                let resent = stats.packetsResent - last.packetsResent
+                let keyFrames = stats.keyFrameRequests - last.keyFrameRequests
+                last = stats
+                if let rung = controller.assess(
+                    packetsSent: sent, packetsResent: resent,
+                    keyFrameRequests: keyFrames
+                ) {
+                    await self?.apply(rung)
+                }
+            }
+        }
+    }
+
+    /// Moves the stream to a rung. Same resolution: one live encoder
+    /// property. Different resolution: new encoder (its first frame is an
+    /// IDR carrying the new parameter sets, which Cast receivers switch on
+    /// seamlessly), then the capture rescales — order matters, because the
+    /// old-size frames still in flight must meet an encoder that accepts them.
+    private func apply(_ rung: QualityRung) async {
+        let previous = currentRung.withLock { current -> QualityRung? in
+            let before = current
+            current = rung
+            return before
+        }
+        onLog?("adaptive: \(previous?.label ?? "start") → \(rung.label)")
+
+        if previous?.quality == rung.quality {
+            activeEncoder.withLock { $0 }?.setBitrate(rung.bitrate)
+        } else if let base = baseSize.withLock({ $0 }) {
+            let size = AdaptiveQuality.fit(base, into: rung.quality.size)
+            let sender = self.sender
+            guard let fresh = try? RealtimeH264Encoder(
+                width: size.width, height: size.height,
+                bitrate: rung.bitrate, frameRate: frameRate
+            ) else {
+                // Encoder creation failing is exotic; degrade by bitrate only
+                // rather than dropping the stream over it.
+                activeEncoder.withLock { $0 }?.setBitrate(rung.bitrate)
+                onQualityChange?(rung)
+                return
+            }
+            fresh.onSample = { [weak sender] sample in sender?.send(sample) }
+            let old = activeEncoder.withLock { current -> RealtimeH264Encoder? in
+                let before = current
+                current = fresh
+                return before
+            }
+            old?.finish()
+            await streamer?.updateCaptureSize(width: size.width, height: size.height)
+        }
+        onQualityChange?(rung)
     }
 
     /// Turns the sound on or off without touching the picture.
@@ -230,10 +335,16 @@ public final class CastMirrorSession: @unchecked Sendable {
     public func audioStats() -> CastStreamSender.Stats? { audioSender?.currentStats() }
 
     public func stop() async {
+        monitorTask?.cancel()
+        monitorTask = nil
         await streamer?.stop()
         streamer = nil
+        let encoder = activeEncoder.withLock { current -> RealtimeH264Encoder? in
+            let before = current
+            current = nil
+            return before
+        }
         encoder?.finish()
-        encoder = nil
         audioEncoder = nil
         sender?.stop()
         sender = nil
