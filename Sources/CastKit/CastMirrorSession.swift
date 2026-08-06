@@ -386,8 +386,11 @@ public final class CastMirrorSession: @unchecked Sendable {
         streamer?.repositionVirtualDisplay(on: side, quality: quality)
     }
 
-    /// Changes how long the receiver holds frames, live — it rides along on
-    /// the next frame, so there's no need to renegotiate.
+    /// Asks the receiver to hold frames for a different time, riding on the
+    /// next frame. The protocol supports it; real receivers were measured
+    /// ignoring it (the reported delay stays at the OFFER's value), so
+    /// callers that need the change to actually happen must renegotiate —
+    /// stop and start a fresh session with the new target.
     public func setPlayoutDelay(ms: Int) {
         playoutDelayMs = ms
         sender?.setPlayoutDelay(ms: ms)
