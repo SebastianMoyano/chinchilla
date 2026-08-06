@@ -160,5 +160,8 @@ public enum Cleaner {
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(entry) else { return }
         RollingLog.append(data, to: auditLogURL, limit: .cleanHistory)
+        // The log rotates; the lifetime counter doesn't. Same call site so
+        // they can never disagree about what counted as a clean.
+        CleanTotalsStore.record(freedBytes: outcome.freedBytes, at: entry.date)
     }
 }

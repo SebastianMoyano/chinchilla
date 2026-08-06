@@ -48,6 +48,7 @@ struct DashboardView: View {
     @Environment(AppState.self) private var appState
     @State private var usage = DiskUsage()
     @State private var lastClean: Cleaner.LastClean?
+    @State private var totals: CleanTotals?
 
     var body: some View {
         ScrollView {
@@ -70,6 +71,7 @@ struct DashboardView: View {
         .onAppear {
             usage = DiskUsage.current()
             lastClean = Cleaner.lastClean()
+            totals = CleanTotalsStore.load()
             appState.snapshots.refresh()
         }
     }
@@ -139,6 +141,11 @@ struct DashboardView: View {
                     Text(lastClean.date, format: .relative(presentation: .named))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let totals, totals.cleanCount > 1 {
+                        Text("Total saved: \(Text(totals.freedBytes, format: .byteCount(style: .file))) since \(Text(totals.since, format: .dateTime.month().year()))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }

@@ -109,6 +109,13 @@ enum ChinchillaCLI {
                 print(String(localized: "No cleans recorded yet."))
             } else {
                 for entry in entries { print(CleanHistory.line(entry)) }
+                // The log above rotates; this counter doesn't.
+                if let totals = await Blocking.run({ CleanTotalsStore.load() }) {
+                    let freed = ByteCountFormatter.string(
+                        fromByteCount: totals.freedBytes, countStyle: .file
+                    )
+                    print(String(localized: "Total: \(freed) freed across \(totals.cleanCount) cleans since \(CleanHistory.timestamp(totals.since))."))
+                }
             }
             return 0
         case .status(let json):
