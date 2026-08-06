@@ -68,6 +68,9 @@ public final class CastMirrorSession: @unchecked Sendable {
     /// Fires whenever the ladder moves (and once at start), off the main
     /// actor — hop before touching UI state.
     public var onQualityChange: (@Sendable (QualityRung) -> Void)?
+    /// The lag the protocol can actually see, refreshed about once a second
+    /// while mirroring. Off the main actor.
+    public var onLatency: (@Sendable (MirrorLatency) -> Void)?
 
     /// Called when the stream dies on its own.
     public var onStopped: (@Sendable (String?) -> Void)?
@@ -270,9 +273,8 @@ public final class CastMirrorSession: @unchecked Sendable {
                 width: startSize.width, height: startSize.height
             )
         }
-        if adaptive {
-            startAdaptiveMonitor(sender: sender, ladder: ladder)
-        }
+        // Always: latency is measured whether or not the ladder may move.
+        startHealthMonitor(sender: sender, ladder: ladder)
         if let rung = currentRung.withLock({ $0 }) {
             onQualityChange?(rung)
         }
@@ -293,16 +295,17 @@ public final class CastMirrorSession: @unchecked Sendable {
         monitorTask = nil
         let ladder = AdaptiveQuality.ladder(ceiling: ceiling, maxBitrate: maxBitrate)
         await apply(ladder[0])
-        if adaptive, let sender {
-            startAdaptiveMonitor(sender: sender, ladder: ladder)
+        if let sender {
+            startHealthMonitor(sender: sender, ladder: ladder)
         }
     }
 
-    /// The stream is the probe: once a second, read the RTCP-fed stats deltas
-    /// and let the controller move the ladder. Ends with the session — the
-    /// task holds everything weakly and exits when the sender goes away.
-    private func startAdaptiveMonitor(sender: CastStreamSender, ladder: [QualityRung]) {
-        guard ladder.count > 1 else { return }
+    /// The stream is the probe: once a second, read the RTCP-fed stats
+    /// deltas, publish the latency estimate, and — when adaptation is on —
+    /// let the controller move the ladder. Ends with the session — the task
+    /// holds everything weakly and exits when the sender goes away.
+    private func startHealthMonitor(sender: CastStreamSender, ladder: [QualityRung]) {
+        let adaptive = self.adaptive && ladder.count > 1
         monitorTask = Task { [weak self, weak sender] in
             var controller = AdaptiveRateController(ladder: ladder)
             var last = CastStreamSender.Stats()
@@ -314,9 +317,17 @@ public final class CastMirrorSession: @unchecked Sendable {
                 let resent = stats.packetsResent - last.packetsResent
                 let keyFrames = stats.keyFrameRequests - last.keyFrameRequests
                 last = stats
-                if let rung = controller.assess(
+                if let p50 = stats.rttMsP50 {
+                    self?.onLatency?(MirrorLatency(
+                        sendToAckP50Ms: Int(p50.rounded()),
+                        sendToAckP95Ms: Int((stats.rttMsP95 ?? p50).rounded()),
+                        playoutDelayMs: stats.receiverPlayoutDelayMs
+                            ?? self?.playoutDelayMs ?? 0
+                    ))
+                }
+                if adaptive, let rung = controller.assess(
                     packetsSent: sent, packetsResent: resent,
-                    keyFrameRequests: keyFrames
+                    keyFrameRequests: keyFrames, rttP95Ms: stats.rttMsP95
                 ) {
                     await self?.apply(rung)
                 }

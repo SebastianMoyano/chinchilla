@@ -190,12 +190,19 @@ struct CastView: View {
                 .foregroundStyle(.tertiary)
             if model.mirroring, let status = model.mirrorQualityStatus {
                 Label {
-                    Text("Now sending \(status)")
+                    if let lag = model.mirrorLatency {
+                        Text("Now sending \(status) · lag ≈ \(lag.estimatedTotalMs) ms")
+                    } else {
+                        Text("Now sending \(status)")
+                    }
                 } icon: {
                     Image(systemName: "antenna.radiowaves.left.and.right")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .help(model.mirrorLatency.map { lag in
+                    String(localized: "Measured from each frame's acknowledgement: network \(lag.sendToAckP50Ms) ms typical (\(lag.sendToAckP95Ms) ms at worst) + \(lag.playoutDelayMs) ms of TV buffer. The TV's own picture processing adds on top — its Game Mode is the biggest lever.")
+                } ?? String(localized: "Measuring…"))
             }
 
             // Sound follows the picture, except when you're still the one

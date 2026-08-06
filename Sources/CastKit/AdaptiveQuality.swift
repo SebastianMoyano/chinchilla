@@ -21,6 +21,29 @@ public struct QualityRung: Sendable, Equatable {
     }
 }
 
+/// What the protocol can actually see of the mirror's lag. The one part no
+/// sender can measure is the TV's own display processing (picture modes,
+/// motion smoothing) — glass-to-glass adds that on top, and the TV's "game
+/// mode" toggle moves it more than anything this struct contains.
+public struct MirrorLatency: Sendable, Equatable {
+    /// Send→ACK per frame: one-way transit + the receiver taking the frame.
+    public let sendToAckP50Ms: Int
+    /// The tail — where a forming queue shows first.
+    public let sendToAckP95Ms: Int
+    /// What the receiver says it is actually buffering.
+    public let playoutDelayMs: Int
+
+    public init(sendToAckP50Ms: Int, sendToAckP95Ms: Int, playoutDelayMs: Int) {
+        self.sendToAckP50Ms = sendToAckP50Ms
+        self.sendToAckP95Ms = sendToAckP95Ms
+        self.playoutDelayMs = playoutDelayMs
+    }
+
+    /// Buffer plus roughly one-way transit: what we'd bet the lag is,
+    /// before the TV's own processing.
+    public var estimatedTotalMs: Int { playoutDelayMs + sendToAckP50Ms / 2 }
+}
+
 /// One knob instead of three. Resolution, bitrate and playout delay aren't
 /// independent decisions — someone choosing "responsive" wants low delay AND
 /// the lighter stream that makes low delay survivable, and someone choosing
@@ -156,9 +179,12 @@ public struct AdaptiveRateController: Sendable {
     public var current: QualityRung { ladder[index] }
 
     /// One tick (~a second) of stats deltas. Returns the new rung when the
-    /// ladder moves, nil to stay put.
+    /// ladder moves, nil to stay put. `rttP95Ms` is the send→ACK tail
+    /// latency: a queue forming on the link shows up there seconds before
+    /// packets start dropping, which is the whole point of reacting to it.
     public mutating func assess(
-        packetsSent: Int, packetsResent: Int, keyFrameRequests: Int
+        packetsSent: Int, packetsResent: Int, keyFrameRequests: Int,
+        rttP95Ms: Double? = nil
     ) -> QualityRung? {
         ticksSinceStepUp = min(ticksSinceStepUp + 1, 1_000)
         if cooldown > 0 {
@@ -174,7 +200,9 @@ public struct AdaptiveRateController: Sendable {
         }
 
         let lossy = packetsResent >= 5 && packetsResent * 100 > packetsSent * 2
-        let struggling = lossy || keyFrameRequests >= 2
+        // Well past any healthy LAN ACK time: frames are queueing somewhere.
+        let queueing = (rttP95Ms ?? 0) > 250
+        let struggling = lossy || keyFrameRequests >= 2 || queueing
         if struggling {
             badTicks += 1
             goodTicks = 0

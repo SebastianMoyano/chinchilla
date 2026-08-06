@@ -179,8 +179,11 @@ final class CastModel {
     /// link is choking or has recovered.
     var adaptiveMirrorQuality = true
     /// What the ladder is currently sending, e.g. "1080p · 6 Mbps" — nil when
-    /// not mirroring on the fast path or when adaptation is off.
+    /// not mirroring on the fast path.
     private(set) var mirrorQualityStatus: String?
+    /// Measured lag, refreshed ~1/s from per-frame ACK timing. Excludes the
+    /// TV's own display processing, which nothing on this side can see.
+    private(set) var mirrorLatency: MirrorLatency?
     /// How long the TV holds frames before showing them. Lower is more
     /// responsive; too low and a jittery Wi-Fi network starts to stutter.
     var mirrorDelayMs = 400 {
@@ -379,12 +382,19 @@ final class CastModel {
                     Task { @MainActor in
                         self?.mirroring = false
                         self?.mirrorQualityStatus = nil
+                        self?.mirrorLatency = nil
                         if let message { self?.mirrorError = message }
                     }
                 }
-                if adaptiveMirrorQuality {
-                    fast.onQualityChange = { [weak self] rung in
-                        Task { @MainActor in self?.mirrorQualityStatus = rung.label }
+                fast.onQualityChange = { [weak self] rung in
+                    Task { @MainActor in self?.mirrorQualityStatus = rung.label }
+                }
+                fast.onLatency = { [weak self] latency in
+                    Task { @MainActor in
+                        // Only rewrite (and re-render) when the number moved.
+                        if self?.mirrorLatency != latency {
+                            self?.mirrorLatency = latency
+                        }
                     }
                 }
                 do {
@@ -539,6 +549,7 @@ final class CastModel {
         mirroring = false
         castingName = nil
         mirrorQualityStatus = nil
+        mirrorLatency = nil
         playbackState = 0
         let target = connected
         let fast = fastMirror

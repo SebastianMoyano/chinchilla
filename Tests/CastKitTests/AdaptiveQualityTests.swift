@@ -144,6 +144,35 @@ private extension AdaptiveRateController {
     #expect(climbed?.bitrate == 8_000_000)
 }
 
+@Test func aSwellingRttTailStepsDownBeforeAnyPacketIsLost() {
+    // A queue forming on the link shows in ACK latency seconds before
+    // drops begin — reacting there is the difference between adapting
+    // and reacting to damage already visible on the TV.
+    var controller = AdaptiveRateController(ladder: AdaptiveQuality.ladder(ceiling: .p1080))
+    controller.settle()
+    #expect(controller.assess(
+        packetsSent: 500, packetsResent: 0, keyFrameRequests: 0, rttP95Ms: 400
+    ) == nil)
+    let dropped = controller.assess(
+        packetsSent: 500, packetsResent: 0, keyFrameRequests: 0, rttP95Ms: 400
+    )
+    #expect(dropped?.bitrate == 6_000_000)
+    // A healthy tail is not congestion.
+    var calm = AdaptiveRateController(ladder: AdaptiveQuality.ladder(ceiling: .p1080))
+    calm.settle()
+    #expect(calm.assess(
+        packetsSent: 500, packetsResent: 0, keyFrameRequests: 0, rttP95Ms: 40
+    ) == nil)
+    #expect(calm.assess(
+        packetsSent: 500, packetsResent: 0, keyFrameRequests: 0, rttP95Ms: 40
+    ) == nil)
+}
+
+@Test func latencyEstimateAddsBufferAndHalfTheRoundTrip() {
+    let lag = MirrorLatency(sendToAckP50Ms: 24, sendToAckP95Ms: 60, playoutDelayMs: 100)
+    #expect(lag.estimatedTotalMs == 112)
+}
+
 @Test func idleTrafficIsEvidenceOfNothing() {
     var controller = AdaptiveRateController(ladder: AdaptiveQuality.ladder(ceiling: .p1080))
     controller.settle()

@@ -21,6 +21,13 @@ public final class CastStreamSender: @unchecked Sendable {
         public var receiverPlayoutDelayMs: Int?
         public var lossReports = 0
         public var packetsResent = 0
+        /// Send→ACK latency per frame, over the last few seconds: the time
+        /// from putting a frame on the wire to the receiver's checkpoint
+        /// acknowledging it received whole. Glass-to-glass is roughly
+        /// half of this plus the playout delay — the TV's own display
+        /// processing is the one part no protocol can see.
+        public var rttMsP50: Double?
+        public var rttMsP95: Double?
     }
 
     private let transport: CastStreamTransport
@@ -46,6 +53,15 @@ public final class CastStreamSender: @unchecked Sendable {
     /// past its playout time anyway.
     private var recentPackets: [UInt8: [Data]] = [:]
     private static let retransmitHistory = 128
+    /// When each recent frame went on the wire, for send→ACK timing. Pruned
+    /// with `recentPackets`, and an entry is consumed on its first ACK — the
+    /// receiver re-states the same checkpoint in every feedback, and timing
+    /// a stale re-statement would read as ever-growing latency.
+    private var sentAt: [UInt8: UInt64] = [:]
+    /// A few seconds of samples at 30 fps — enough for stable percentiles,
+    /// small enough to sort on every stats read.
+    private var rttSamples: [Double] = []
+    private static let rttWindow = 90
 
     /// Fires when the receiver asks for a key frame.
     public var onKeyFrameRequest: (@Sendable () -> Void)?
@@ -82,7 +98,13 @@ public final class CastStreamSender: @unchecked Sendable {
 
     public func currentStats() -> Stats {
         lock.lock(); defer { lock.unlock() }
-        return stats
+        var snapshot = stats
+        if !rttSamples.isEmpty {
+            let sorted = rttSamples.sorted()
+            snapshot.rttMsP50 = sorted[sorted.count / 2]
+            snapshot.rttMsP95 = sorted[min(sorted.count - 1, sorted.count * 95 / 100)]
+        }
+        return snapshot
     }
 
     /// Asks the receiver to change how long it holds frames before showing
@@ -145,8 +167,10 @@ public final class CastStreamSender: @unchecked Sendable {
         stats.bytesSent += packets.reduce(0) { $0 + $1.count }
         let wireID = UInt8(truncatingIfNeeded: id)
         recentPackets[wireID] = packets
+        sentAt[wireID] = DispatchTime.now().uptimeNanoseconds
         // Drop the entry half a wrap behind, so IDs never alias.
         recentPackets[wireID &- UInt8(Self.retransmitHistory)] = nil
+        sentAt[wireID &- UInt8(Self.retransmitHistory)] = nil
         lock.unlock()
 
         send(packets: packets)
@@ -214,6 +238,13 @@ public final class CastStreamSender: @unchecked Sendable {
         lock.lock()
         stats.reportsReceived += 1
         if let ack = feedback.ackFrameID { stats.lastAckedFrameID = ack }
+        if let ack = feedback.ackFrameID, let sent = sentAt.removeValue(forKey: ack) {
+            let rtt = Double(DispatchTime.now().uptimeNanoseconds &- sent) / 1_000_000
+            rttSamples.append(rtt)
+            if rttSamples.count > Self.rttWindow {
+                rttSamples.removeFirst(rttSamples.count - Self.rttWindow)
+            }
+        }
         if let delay = feedback.playoutDelayMs { stats.receiverPlayoutDelayMs = delay }
         if feedback.lossFields > 0 { stats.lossReports += feedback.lossFields }
         if feedback.wantsKeyFrame { stats.keyFrameRequests += 1 }
