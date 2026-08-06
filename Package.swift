@@ -19,7 +19,7 @@ let package = Package(
         .testTarget(name: "CleanCoreTests", dependencies: ["CleanCore"]),
         .testTarget(name: "DiskScanKitTests", dependencies: ["DiskScanKit"]),
         .testTarget(name: "SystemKitTests", dependencies: ["SystemKit"]),
-        .testTarget(name: "CastKitTests", dependencies: ["CastKit"]),
+        .testTarget(name: "CastKitTests", dependencies: ["CastKit", "DiskScanKit"]),
         .testTarget(name: "StreamHostKitTests", dependencies: ["StreamHostKit", "DiskScanKit"]),
     ]
 )

@@ -12,6 +12,11 @@ public final class OpusAudioEncoder: @unchecked Sendable {
         public let data: Data
         /// Cumulative position in 48 kHz samples — the RTP timestamp.
         public let sampleTime: Int64
+        /// The host-clock moment this packet's audio was captured — the same
+        /// clock video frames carry in their presentation time. The sender
+        /// reports pair RTP time with this, which is what lets the receiver
+        /// lip-sync the two streams for real.
+        public let captureHostSeconds: Double
     }
 
     public var onPacket: (@Sendable (Packet) -> Void)?
@@ -23,6 +28,13 @@ public final class OpusAudioEncoder: @unchecked Sendable {
     private var queue: [AVAudioPCMBuffer] = []
     private var samplesEncoded: Int64 = 0
     private var framesPerPacket = 960          // 20 ms at 48 kHz
+    /// Where sample 0 sits on the host clock. The sample counter alone is a
+    /// lie waiting to happen: it assumes the capture never skips, and every
+    /// skipped stretch of silence would shift the audio timeline off the
+    /// video's — permanently. The capture clock is the truth; the counter is
+    /// resynced against it whenever they disagree by more than jitter.
+    private var firstPTSSeconds: Double?
+    private var inputSamples: Int64 = 0
 
     public init(bitrate: Int = 128_000) {
         self.bitrate = bitrate
@@ -30,10 +42,25 @@ public final class OpusAudioEncoder: @unchecked Sendable {
 
     public func encode(_ sampleBuffer: CMSampleBuffer) {
         guard let pcm = Self.pcmBuffer(from: sampleBuffer) else { return }
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
 
         lock.lock()
         if converter == nil { setUpConverter(inputFormat: pcm.format) }
         guard let converter, let outputFormat else { lock.unlock(); return }
+        if firstPTSSeconds == nil, pts.isFinite { firstPTSSeconds = pts }
+        if let first = firstPTSSeconds, pts.isFinite {
+            // The capture is configured at 48 kHz, so input frames and RTP
+            // ticks share a rate and can be compared directly.
+            let expected = Int64(((pts - first) * 48_000).rounded())
+            let drift = expected - inputSamples
+            if abs(drift) > 4_800 {    // >100 ms: a capture gap, not jitter
+                inputSamples += drift
+                samplesEncoded += drift
+                queue.removeAll()
+                converter.reset()
+            }
+        }
+        inputSamples += Int64(pcm.frameLength)
         queue.append(pcm)
         // Don't let a stalled encoder grow without bound.
         if queue.count > 100 { queue.removeFirst(queue.count - 100) }
@@ -61,7 +88,11 @@ public final class OpusAudioEncoder: @unchecked Sendable {
             }
             let byteCount = Int(compressed.byteLength)
             let data = Data(bytes: compressed.data, count: byteCount)
-            packets.append(Packet(data: data, sampleTime: samplesEncoded))
+            packets.append(Packet(
+                data: data, sampleTime: samplesEncoded,
+                captureHostSeconds: (firstPTSSeconds ?? 0)
+                    + Double(samplesEncoded) / 48_000
+            ))
             samplesEncoded += Int64(framesPerPacket)
             if ranOut { break }
         }
@@ -75,6 +106,8 @@ public final class OpusAudioEncoder: @unchecked Sendable {
         lock.lock()
         queue.removeAll()
         samplesEncoded = 0
+        inputSamples = 0
+        firstPTSSeconds = nil
         converter?.reset()
         lock.unlock()
     }

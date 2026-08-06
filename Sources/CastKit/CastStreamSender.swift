@@ -42,6 +42,10 @@ public final class CastStreamSender: @unchecked Sendable {
     private var lastReferencedID: UInt32 = 0
     private var firstPresentationTime: CMTime?
     private var lastRTPTimestamp: UInt32 = 0
+    /// Host-clock capture time of the media behind `lastRTPTimestamp`, so
+    /// the sender report can pair the RTP timestamp with the wall time that
+    /// media actually existed — not with "now".
+    private var lastCaptureHostSeconds: Double?
     private var stats = Stats()
     private var reportTimer: DispatchSourceTimer?
     private var pendingPlayoutDelayMs = 0
@@ -127,7 +131,8 @@ public final class CastStreamSender: @unchecked Sendable {
         lock.unlock()
 
         send(payload: sample.annexB, rtpTimestamp: UInt32(truncatingIfNeeded: ticks),
-             isKeyFrame: sample.isKeyFrame)
+             isKeyFrame: sample.isKeyFrame,
+             captureHostSeconds: sample.presentationTime.seconds)
     }
 
     /// Every Opus packet decodes on its own, so audio has no delta frames —
@@ -135,10 +140,14 @@ public final class CastStreamSender: @unchecked Sendable {
     public func sendAudio(_ packet: OpusAudioEncoder.Packet) {
         send(payload: packet.data,
              rtpTimestamp: UInt32(truncatingIfNeeded: packet.sampleTime),
-             isKeyFrame: true)
+             isKeyFrame: true,
+             captureHostSeconds: packet.captureHostSeconds)
     }
 
-    public func send(payload: Data, rtpTimestamp: UInt32, isKeyFrame: Bool) {
+    public func send(
+        payload: Data, rtpTimestamp: UInt32, isKeyFrame: Bool,
+        captureHostSeconds: Double? = nil
+    ) {
         lock.lock()
         let id = frameID
         // A key frame stands on its own; a delta frame names the one before it.
@@ -146,6 +155,9 @@ public final class CastStreamSender: @unchecked Sendable {
         frameID &+= 1
         lastReferencedID = id
         lastRTPTimestamp = rtpTimestamp
+        if let captureHostSeconds, captureHostSeconds.isFinite {
+            lastCaptureHostSeconds = captureHostSeconds
+        }
         let delay = pendingPlayoutDelayMs
         pendingPlayoutDelayMs = 0
         lock.unlock()
@@ -206,12 +218,24 @@ public final class CastStreamSender: @unchecked Sendable {
     private func sendSenderReport() {
         lock.lock()
         let rtpTimestamp = lastRTPTimestamp
+        let capture = lastCaptureHostSeconds
         let packets = UInt32(truncatingIfNeeded: stats.packetsSent)
         let octets = UInt32(truncatingIfNeeded: stats.bytesSent)
         lock.unlock()
 
+        // The receiver lip-syncs audio to video through these NTP↔RTP pairs.
+        // Pairing the last frame's timestamp with "now" skewed each stream
+        // by that frame's age — different for audio and video, and unbounded
+        // for video on a still screen — and the skew went straight into the
+        // sync. Pair with the media's own capture moment instead.
+        var ntp = CastRTP.ntpTimestamp()
+        if let capture {
+            let hostNow = CMClockGetTime(CMClockGetHostTimeClock()).seconds
+            let age = max(0, hostNow - capture)
+            ntp = CastRTP.ntpTimestamp(Date().addingTimeInterval(-age))
+        }
         let report = CastRTP.senderReport(
-            ssrc: ssrc, ntp: CastRTP.ntpTimestamp(), rtpTimestamp: rtpTimestamp,
+            ssrc: ssrc, ntp: ntp, rtpTimestamp: rtpTimestamp,
             packetCount: packets, octetCount: octets
         )
         transport.send(report)
