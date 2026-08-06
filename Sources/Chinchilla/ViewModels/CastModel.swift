@@ -136,6 +136,24 @@ final class CastModel {
     // MARK: Screen mirroring
     var mirroring = false
     var mirrorStarting = false
+    /// The one mirroring knob the UI shows. Resolution, Mbps target and
+    /// playout delay move together — "responsive" means a lighter stream AND
+    /// less buffer, "best picture" the opposite — so exposing them as three
+    /// controls made users pick contradictions. Applies live mid-stream.
+    var mirrorLevel: MirrorPreset = .bestPicture {
+        didSet {
+            guard mirrorLevel != oldValue else { return }
+            mirrorQuality = mirrorLevel.quality
+            mirrorDelayMs = mirrorLevel.playoutDelayMs
+            let level = mirrorLevel
+            Task { [weak self] in
+                await self?.fastMirror?.setLevel(
+                    ceiling: level.quality, maxBitrate: level.bitrateCap,
+                    playoutDelayMs: level.playoutDelayMs
+                )
+            }
+        }
+    }
     var mirrorQuality: MirrorQuality = .p1080
     /// Applied the moment it changes, not on the next connection — a
     /// checkbox that needs a reconnect to take effect reads as broken.
@@ -354,7 +372,8 @@ final class CastModel {
                     host: device.host, quality: mirrorQuality,
                     includeAudio: mirrorAudio, source: mirrorSource,
                     extendedSide: extendedSide, playoutDelayMs: mirrorDelayMs,
-                    adaptive: adaptiveMirrorQuality
+                    adaptive: adaptiveMirrorQuality,
+                    maxBitrate: mirrorLevel.bitrateCap
                 )
                 fast.onStopped = { [weak self] message in
                     Task { @MainActor in

@@ -22,6 +22,43 @@ public struct QualityRung: Sendable, Equatable {
     }
 }
 
+/// One knob instead of three. Resolution, bitrate and playout delay aren't
+/// independent decisions — someone choosing "responsive" wants low delay AND
+/// the lighter stream that makes low delay survivable, and someone choosing
+/// "best picture" accepts the buffer that keeps 1080p smooth. Each level is a
+/// coherent point on that trade; the adaptive ladder then works downward from
+/// the level's ceiling when the Wi-Fi disagrees.
+public enum MirrorPreset: String, Sendable, CaseIterable, Identifiable {
+    case bestPicture, balanced, responsive
+    public var id: String { rawValue }
+
+    /// Resolution ceiling for the level.
+    public var quality: MirrorQuality {
+        switch self {
+        case .bestPicture, .balanced: .p1080
+        case .responsive: .p720
+        }
+    }
+
+    /// The ladder never starts above this — each level targets its own Mbps.
+    public var bitrateCap: Int {
+        switch self {
+        case .bestPicture: 8_000_000
+        case .balanced: 6_000_000
+        case .responsive: 4_000_000
+        }
+    }
+
+    /// How long the TV holds frames. Lower feels immediate, needs headroom.
+    public var playoutDelayMs: Int {
+        switch self {
+        case .bestPicture: 400
+        case .balanced: 200
+        case .responsive: 100
+        }
+    }
+}
+
 /// Adaptive mirroring quality, the way Chrome's own Cast sender does it: the
 /// stream is the probe. There is no separate "speed test" to the TV — the
 /// receiver can't cooperate with one, and saturating the Wi-Fi right before
@@ -33,17 +70,20 @@ public enum AdaptiveQuality {
     /// the ladder never climbs above it, and drops below it when the Wi-Fi
     /// says so. Bitrate steps inside a resolution are cheap (a live encoder
     /// property); crossing a resolution boundary rebuilds the encoder.
-    public static func ladder(ceiling: MirrorQuality) -> [QualityRung] {
+    public static func ladder(
+        ceiling: MirrorQuality, maxBitrate: Int = .max
+    ) -> [QualityRung] {
         let p1080 = [8_000_000, 6_000_000, 4_500_000].map {
             QualityRung(quality: .p1080, bitrate: $0)
         }
         let p720 = [4_000_000, 3_000_000, 2_000_000].map {
             QualityRung(quality: .p720, bitrate: $0)
         }
-        switch ceiling {
-        case .p1080: return p1080 + p720
-        case .p720: return p720
-        }
+        let full = ceiling == .p1080 ? p1080 + p720 : p720
+        // A level's Mbps target trims the top; the floor always survives, so
+        // a cap below every rung still leaves somewhere to stand.
+        let capped = full.filter { $0.bitrate <= maxBitrate }
+        return capped.isEmpty ? [full[full.count - 1]] : capped
     }
 
     /// Scales a capture size into a rung's box, keeping aspect and never

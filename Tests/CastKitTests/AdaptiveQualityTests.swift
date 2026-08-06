@@ -34,6 +34,19 @@ private extension AdaptiveRateController {
     #expect(capped.first?.bitrate == MirrorQuality.p720.bitrate)
 }
 
+@Test func aLevelsMbpsTargetTrimsTheTopOfTheLadder() {
+    // "Balanced": 1080p ceiling but never above 6 Mbps.
+    let balanced = AdaptiveQuality.ladder(
+        ceiling: MirrorPreset.balanced.quality,
+        maxBitrate: MirrorPreset.balanced.bitrateCap
+    )
+    #expect(balanced.first == QualityRung(quality: .p1080, bitrate: 6_000_000))
+    #expect(balanced.allSatisfy { $0.bitrate <= 6_000_000 })
+    // A cap below every rung still leaves the floor to stand on.
+    let floor = AdaptiveQuality.ladder(ceiling: .p720, maxBitrate: 1)
+    #expect(floor == [QualityRung(quality: .p720, bitrate: 2_000_000)])
+}
+
 @Test func sustainedLossStepsDownASingleBlipDoesNot() {
     var controller = AdaptiveRateController(ladder: AdaptiveQuality.ladder(ceiling: .p1080))
     controller.settle()

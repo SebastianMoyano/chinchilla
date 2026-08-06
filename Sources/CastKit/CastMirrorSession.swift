@@ -56,6 +56,10 @@ public final class CastMirrorSession: @unchecked Sendable {
     // MARK: Adaptive quality
     /// Whether the ladder runs at all; chosen before the stream starts.
     public let adaptive: Bool
+    /// The level's Mbps target — the ladder never starts above it. Mutable
+    /// because the user can switch levels mid-stream.
+    private let bitrateCap: Locked<Int>
+    private let qualityCeiling: Locked<MirrorQuality>
     /// The capture size at the ceiling quality — rung sizes scale from it so
     /// aspect is preserved for windows and odd-shaped displays.
     private let baseSize = Locked<(width: Int, height: Int)?>(nil)
@@ -75,7 +79,8 @@ public final class CastMirrorSession: @unchecked Sendable {
         source: MirrorSource = .wholeScreen,
         extendedSide: ExtendedSide = .right,
         playoutDelayMs: Int = CastStreaming.defaultTargetDelayMs,
-        adaptive: Bool = true
+        adaptive: Bool = true,
+        maxBitrate: Int = .max
     ) {
         self.host = host
         self.quality = quality
@@ -85,6 +90,8 @@ public final class CastMirrorSession: @unchecked Sendable {
         self.extendedSide = extendedSide
         self.playoutDelayMs = playoutDelayMs
         self.adaptive = adaptive
+        self.bitrateCap = Locked(maxBitrate)
+        self.qualityCeiling = Locked(quality)
     }
 
     /// Every failure past the first allocation has to give the resources back.
@@ -108,12 +115,19 @@ public final class CastMirrorSession: @unchecked Sendable {
             throw Failure.noDisplay
         }
 
+        // The level's Mbps target trims the ladder before anything starts.
+        let ladder = AdaptiveQuality.ladder(
+            ceiling: quality, maxBitrate: bitrateCap.withLock { $0 }
+        )
+        let startRung = ladder[0]
+        let startSize = AdaptiveQuality.fit(size, into: startRung.quality.size)
+
         // The offer has to describe what we will actually send.
         var offer = CastStreaming.Offer()
-        offer.width = size.width
-        offer.height = size.height
+        offer.width = startSize.width
+        offer.height = startSize.height
         offer.frameRate = frameRate
-        offer.videoBitRate = quality.bitrate
+        offer.videoBitRate = startRung.bitrate
         // Always offered, even when it starts switched off — see `sendAudio`.
         offer.includeAudio = true
         sendAudio.withLock { $0 = includeAudio }
@@ -172,7 +186,7 @@ public final class CastMirrorSession: @unchecked Sendable {
         self.transport = transport
 
         let encoder = try RealtimeH264Encoder(
-            width: size.width, height: size.height,
+            width: startSize.width, height: startSize.height,
             bitrate: sealed.videoBitRate, frameRate: frameRate
         )
         let sender = CastStreamSender(
@@ -190,10 +204,21 @@ public final class CastMirrorSession: @unchecked Sendable {
         sender.start()
         encoder.onSample = { [weak sender] sample in sender?.send(sample) }
         activeEncoder.withLock { $0 = encoder }
-        baseSize.withLock { $0 = size }
-        currentRung.withLock {
-            $0 = QualityRung(quality: quality, bitrate: sealed.videoBitRate)
+        // Aspect reference at the 1080p box, so a mid-stream level change can
+        // raise the capture back up — the source display has the detail. The
+        // virtual display is the exception: it *is* its created size, and
+        // upscaling it would be interpolation dressed as quality.
+        let base: (width: Int, height: Int)
+        if case .extendedDisplay = source {
+            base = size
+        } else if quality == .p1080 {
+            base = size
+        } else {
+            base = (max(2, size.width * 3 / 2 / 2 * 2),
+                    max(2, size.height * 3 / 2 / 2 * 2))
         }
+        baseSize.withLock { $0 = base }
+        currentRung.withLock { $0 = startRung }
 
         // Audio rides a second RTP stream: its own SSRC, its own keys, and a
         // 48 kHz timebase instead of video's 90 kHz.
@@ -236,8 +261,15 @@ public final class CastMirrorSession: @unchecked Sendable {
         self.sender = sender
         self.streamer = streamer
 
+        // A level whose target sits below the ceiling's resolution starts
+        // the capture there too (the config above captured at the ceiling).
+        if startRung.quality != quality {
+            await streamer.updateCaptureSize(
+                width: startSize.width, height: startSize.height
+            )
+        }
         if adaptive {
-            startAdaptiveMonitor(sender: sender)
+            startAdaptiveMonitor(sender: sender, ladder: ladder)
         }
         if let rung = currentRung.withLock({ $0 }) {
             onQualityChange?(rung)
@@ -246,11 +278,28 @@ public final class CastMirrorSession: @unchecked Sendable {
 
     // MARK: Adaptive quality
 
+    /// Switches the level mid-stream: the new delay rides on the next frame,
+    /// and the ladder is rebuilt under the new ceiling and Mbps target — the
+    /// stream jumps to the new top rung, then adaptation resumes from there.
+    public func setLevel(
+        ceiling: MirrorQuality, maxBitrate: Int, playoutDelayMs: Int
+    ) async {
+        setPlayoutDelay(ms: playoutDelayMs)
+        qualityCeiling.withLock { $0 = ceiling }
+        bitrateCap.withLock { $0 = maxBitrate }
+        monitorTask?.cancel()
+        monitorTask = nil
+        let ladder = AdaptiveQuality.ladder(ceiling: ceiling, maxBitrate: maxBitrate)
+        await apply(ladder[0])
+        if adaptive, let sender {
+            startAdaptiveMonitor(sender: sender, ladder: ladder)
+        }
+    }
+
     /// The stream is the probe: once a second, read the RTCP-fed stats deltas
     /// and let the controller move the ladder. Ends with the session — the
     /// task holds everything weakly and exits when the sender goes away.
-    private func startAdaptiveMonitor(sender: CastStreamSender) {
-        let ladder = AdaptiveQuality.ladder(ceiling: quality)
+    private func startAdaptiveMonitor(sender: CastStreamSender, ladder: [QualityRung]) {
         guard ladder.count > 1 else { return }
         monitorTask = Task { [weak self, weak sender] in
             var controller = AdaptiveRateController(ladder: ladder)

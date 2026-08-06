@@ -2,6 +2,26 @@ import SwiftUI
 import AppKit
 import CastKit
 
+extension MirrorPreset {
+    var title: LocalizedStringKey {
+        switch self {
+        case .bestPicture: "Best picture"
+        case .balanced: "Balanced"
+        case .responsive: "Most responsive"
+        }
+    }
+
+    /// What the level actually means, in the units that matter: sharpness,
+    /// bandwidth it will ask of the Wi-Fi, and how far behind the TV runs.
+    var detail: LocalizedStringKey {
+        switch self {
+        case .bestPicture: "1080p · up to 8 Mbps · the TV runs ~0.4 s behind"
+        case .balanced: "1080p · up to 6 Mbps · ~0.2 s behind"
+        case .responsive: "720p · up to 4 Mbps · ~0.1 s behind — for using the TV like a monitor"
+        }
+    }
+}
+
 struct CastView: View {
     @Environment(AppState.self) private var appState
     @State private var manualIP = ""
@@ -136,6 +156,44 @@ struct CastView: View {
                     .controlSize(.small)
                     Spacer()
                 }
+            }
+
+            // One level instead of quality + responsiveness as separate axes:
+            // wanting "responsive" means wanting the lighter stream that makes
+            // low delay survivable. Always visible, applies live mid-stream.
+            HStack(spacing: 12) {
+                Picker("Level", selection: Binding(
+                    get: { model.mirrorLevel },
+                    set: { model.mirrorLevel = $0 }
+                )) {
+                    ForEach(MirrorPreset.allCases) { level in
+                        Text(level.title).tag(level)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                Toggle(isOn: Binding(
+                    get: { model.adaptiveMirrorQuality },
+                    set: { model.adaptiveMirrorQuality = $0 }
+                )) {
+                    Text("Adapt to Wi-Fi")
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .help("Watches how the TV is receiving the stream and steps the quality down before it stutters, then climbs back when the network recovers. The level sets the ceiling.")
+                Spacer()
+            }
+            Text(model.mirrorLevel.detail)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            if model.mirroring, let status = model.mirrorQualityStatus {
+                Label {
+                    Text("Now sending \(status)")
+                } icon: {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             // Sound follows the picture, except when you're still the one
@@ -477,31 +535,6 @@ struct MirrorCard: View {
                 }
             } else if !model.mirroring {
                 HStack(spacing: 12) {
-                    Picker("Quality", selection: Binding(
-                        get: { model.mirrorQuality },
-                        set: { model.mirrorQuality = $0 }
-                    )) {
-                        Text("720p").tag(MirrorQuality.p720)
-                        Text("1080p").tag(MirrorQuality.p1080)
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                    .disabled(model.mirroring)
-                    .help(model.adaptiveMirrorQuality
-                          ? String(localized: "The best quality the stream will try. If the Wi-Fi can't keep up, it steps down on its own.")
-                          : String(localized: "How sharp the picture is."))
-                    Toggle(isOn: Binding(
-                        get: { model.adaptiveMirrorQuality },
-                        set: { model.adaptiveMirrorQuality = $0 }
-                    )) {
-                        Text("Adapt to Wi-Fi")
-                    }
-                    .toggleStyle(.checkbox)
-                    .help("Watches how the TV is receiving the stream and lowers the quality before it stutters — then climbs back when the network recovers. Only the fast Chromecast path can do this; the picker above becomes the ceiling.")
-                    Spacer()
-                }
-
-                HStack(spacing: 12) {
                     Picker("Send", selection: Binding(
                         get: { model.mirrorSource },
                         set: { model.mirrorSource = $0 }
@@ -539,38 +572,12 @@ struct MirrorCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if model.supportsFastMirror {
-                    HStack(spacing: 12) {
-                        Picker("Responsiveness", selection: Binding(
-                            get: { model.mirrorDelayMs },
-                            set: { model.mirrorDelayMs = $0 }
-                        )) {
-                            Text("Smoothest").tag(400)
-                            Text("Balanced").tag(200)
-                            Text("Most responsive").tag(100)
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
-                        .help("How long the TV holds each frame before showing it. Lower feels more immediate; on a busy Wi-Fi network it can stutter.")
-                        Spacer()
-                    }
-                }
             }
 
             if model.mirroring && model.mirrorUsingFallback {
                 Label("This TV wouldn't take the fast stream, so we're using the slower one. Expect a second or two of delay.", systemImage: "tortoise")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-
-            if model.mirroring, let status = model.mirrorQualityStatus {
-                Label {
-                    Text("Adapting to your Wi-Fi — now sending \(status)")
-                } icon: {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
 
             if let error = model.mirrorError {
