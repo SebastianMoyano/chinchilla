@@ -318,11 +318,15 @@ public final class CastMirrorSession: @unchecked Sendable {
                 let keyFrames = stats.keyFrameRequests - last.keyFrameRequests
                 last = stats
                 if let p50 = stats.rttMsP50 {
+                    // The buffer term is what we last *asked* for, not what
+                    // the receiver reports: the report just echoes the
+                    // OFFER-time target forever, while field testing showed
+                    // in-band changes are honored — the felt lag moved with
+                    // the level while the reported value sat still.
                     self?.onLatency?(MirrorLatency(
                         sendToAckP50Ms: Int(p50.rounded()),
                         sendToAckP95Ms: Int((stats.rttMsP95 ?? p50).rounded()),
-                        playoutDelayMs: stats.receiverPlayoutDelayMs
-                            ?? self?.playoutDelayMs ?? 0
+                        playoutDelayMs: self?.playoutDelayMs ?? 0
                     ))
                 }
                 if adaptive, let rung = controller.assess(
@@ -387,10 +391,9 @@ public final class CastMirrorSession: @unchecked Sendable {
     }
 
     /// Asks the receiver to hold frames for a different time, riding on the
-    /// next frame. The protocol supports it; real receivers were measured
-    /// ignoring it (the reported delay stays at the OFFER's value), so
-    /// callers that need the change to actually happen must renegotiate —
-    /// stop and start a fresh session with the new target.
+    /// next frame. Honored in practice — field-tested: the felt lag tracks
+    /// this — but the receiver's *reported* delay keeps echoing the OFFER's
+    /// original target, so never treat that report as confirmation.
     public func setPlayoutDelay(ms: Int) {
         playoutDelayMs = ms
         sender?.setPlayoutDelay(ms: ms)

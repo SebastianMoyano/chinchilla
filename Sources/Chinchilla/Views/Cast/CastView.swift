@@ -162,10 +162,8 @@ struct CastView: View {
 
             // One level instead of quality + responsiveness as separate axes:
             // wanting "responsive" means wanting the lighter stream that makes
-            // low delay survivable. Always visible. Mid-stream, resolution and
-            // bitrate move live; a level with a different TV buffer restarts
-            // the stream (one blink) — receivers only honor delay at OFFER
-            // time, verified against a real TV.
+            // low delay survivable. Always visible, and every part of it —
+            // resolution, bitrate, TV buffer — applies live mid-stream.
             HStack(spacing: 12) {
                 Picker("Level", selection: Binding(
                     get: { model.mirrorLevel },

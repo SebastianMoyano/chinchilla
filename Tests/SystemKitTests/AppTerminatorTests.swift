@@ -41,7 +41,16 @@ private func spawnUniqueSleeper() throws -> (name: String, process: Process, url
     }
     #expect(found == [process.processIdentifier])
 
-    let outcome = await AppTerminator.close(name: name)
+    // With the whole suite hammering the machine, one proc_listallpids
+    // snapshot can transiently miss a just-spawned process — the pre-check
+    // above retries for the same reason. The test is "a plain process is
+    // reachable", not "the first snapshot never blinks".
+    var outcome = AppTerminator.Outcome()
+    for _ in 0..<10 {
+        outcome = await AppTerminator.close(name: name)
+        if outcome.didSomething { break }
+        usleep(50_000)
+    }
     // Not an application, so nothing goes through AppKit — this is exactly the
     // path that used to do nothing at all.
     #expect(outcome.applicationsAsked == 0)

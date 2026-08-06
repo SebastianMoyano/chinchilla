@@ -146,27 +146,18 @@ final class CastModel {
             mirrorQuality = mirrorLevel.quality
             mirrorDelayMs = mirrorLevel.playoutDelayMs
             let level = mirrorLevel
-            // Resolution and bitrate move in-band mid-stream. The playout
-            // delay does not: it is honored from the OFFER, and the in-band
-            // change the protocol nominally supports is ignored by real
-            // receivers — measured live: the reported delay sat at the
-            // OFFER's 400 ms through every level switch. A different delay
-            // needs a fresh negotiation, so the stream blinks once instead
-            // of silently keeping the old buffer.
-            if mirroring, fastMirror != nil,
-               oldValue.playoutDelayMs != level.playoutDelayMs {
-                stopMirroring()
-                Task { [weak self] in
-                    try? await Task.sleep(for: .milliseconds(600))
-                    self?.startMirroring()
-                }
-            } else {
-                Task { [weak self] in
-                    await self?.fastMirror?.setLevel(
-                        ceiling: level.quality, maxBitrate: level.bitrateCap,
-                        playoutDelayMs: level.playoutDelayMs
-                    )
-                }
+            // Everything moves in-band mid-stream, delay included. This was
+            // briefly a stop-and-renegotiate (black blink) because the
+            // receiver *reports* a delay stuck at the OFFER's value — but
+            // field testing settled it: the felt lag clearly changed with
+            // the level even while the report said 400 ms. The receiver
+            // honors the in-band change and merely echoes the negotiated
+            // target back; the knob worked, the reporter lies.
+            Task { [weak self] in
+                await self?.fastMirror?.setLevel(
+                    ceiling: level.quality, maxBitrate: level.bitrateCap,
+                    playoutDelayMs: level.playoutDelayMs
+                )
             }
         }
     }
