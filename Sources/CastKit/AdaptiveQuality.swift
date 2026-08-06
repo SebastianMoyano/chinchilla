@@ -17,8 +17,7 @@ public struct QualityRung: Sendable, Equatable {
         let number = mbps == mbps.rounded()
             ? String(Int(mbps))
             : String(format: "%.1f", mbps)
-        let box = quality == .p1080 ? "1080p" : "720p"
-        return "\(box) · \(number) Mbps"
+        return "\(quality.heightLabel) · \(number) Mbps"
     }
 }
 
@@ -29,7 +28,12 @@ public struct QualityRung: Sendable, Equatable {
 /// coherent point on that trade; the adaptive ladder then works downward from
 /// the level's ceiling when the Wi-Fi disagrees.
 public enum MirrorPreset: String, Sendable, CaseIterable, Identifiable {
-    case bestPicture, balanced, responsive
+    /// Ultra follows the H.264 playbook, because H.264 is what the Cast
+    /// mirror receiver actually negotiates (no Mac has an AV1 hardware
+    /// encoder, and HEVC isn't in the receiver's vocabulary): at ultra-low
+    /// delay you drop *pixels*, not bits — 480p with bitrate headroom
+    /// survives fast motion where a starved 720p shatters into blocks.
+    case bestPicture, balanced, responsive, ultra
     public var id: String { rawValue }
 
     /// Resolution ceiling for the level.
@@ -37,6 +41,7 @@ public enum MirrorPreset: String, Sendable, CaseIterable, Identifiable {
         switch self {
         case .bestPicture, .balanced: .p1080
         case .responsive: .p720
+        case .ultra: .p480
         }
     }
 
@@ -46,6 +51,7 @@ public enum MirrorPreset: String, Sendable, CaseIterable, Identifiable {
         case .bestPicture: 8_000_000
         case .balanced: 6_000_000
         case .responsive: 4_000_000
+        case .ultra: 3_500_000
         }
     }
 
@@ -55,6 +61,7 @@ public enum MirrorPreset: String, Sendable, CaseIterable, Identifiable {
         case .bestPicture: 400
         case .balanced: 200
         case .responsive: 100
+        case .ultra: 50
         }
     }
 }
@@ -79,7 +86,26 @@ public enum AdaptiveQuality {
         let p720 = [4_000_000, 3_000_000, 2_000_000].map {
             QualityRung(quality: .p720, bitrate: $0)
         }
-        let full = ceiling == .p1080 ? p1080 + p720 : p720
+        // 480p plays two different roles, so it gets two different bitrate
+        // sets. As the *floor* of the bigger ladders it sits below 720p@2 —
+        // rungs must descend in Mbps, because a link that can't carry 2 Mbps
+        // certainly can't carry more, and going lower than 2 on H.264 means
+        // shedding pixels so the bits that remain aren't starved. As the
+        // *ceiling* of the Ultra level the constraint is latency, not
+        // bandwidth: fewer pixels WITH bitrate headroom, because a lean
+        // 480p would shatter on motion just like a lean 720p does.
+        let p480Floor = [1_800_000, 1_200_000].map {
+            QualityRung(quality: .p480, bitrate: $0)
+        }
+        let p480Ultra = [3_500_000, 2_500_000, 1_500_000].map {
+            QualityRung(quality: .p480, bitrate: $0)
+        }
+        let full: [QualityRung]
+        switch ceiling {
+        case .p1080: full = p1080 + p720 + p480Floor
+        case .p720: full = p720 + p480Floor
+        case .p480: full = p480Ultra
+        }
         // A level's Mbps target trims the top; the floor always survives, so
         // a cap below every rung still leaves somewhere to stand.
         let capped = full.filter { $0.bitrate <= maxBitrate }

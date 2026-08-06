@@ -5,10 +5,14 @@ import CoreGraphics
 import VirtualDisplayKit
 
 public enum MirrorQuality: String, Sendable, CaseIterable {
-    case p720, p1080
+    /// 480p exists for latency, not looks: H.264 starved of bits shatters on
+    /// fast motion, so the way down from "720p is stuttering" is fewer
+    /// pixels with bitrate headroom — not the same pixels with less.
+    case p480, p720, p1080
 
     var size: (width: Int, height: Int) {
         switch self {
+        case .p480: (854, 480)
         case .p720: (1280, 720)
         case .p1080: (1920, 1080)
         }
@@ -16,8 +20,17 @@ public enum MirrorQuality: String, Sendable, CaseIterable {
 
     var bitrate: Int {
         switch self {
+        case .p480: 3_500_000
         case .p720: 4_000_000
         case .p1080: 8_000_000
+        }
+    }
+
+    public var heightLabel: String {
+        switch self {
+        case .p480: "480p"
+        case .p720: "720p"
+        case .p1080: "1080p"
         }
     }
 }

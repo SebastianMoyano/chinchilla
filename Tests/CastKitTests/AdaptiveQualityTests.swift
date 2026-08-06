@@ -28,10 +28,35 @@ private extension AdaptiveRateController {
 
 @Test func theLadderNeverClimbsAboveTheCeiling() {
     let capped = AdaptiveQuality.ladder(ceiling: .p720)
-    #expect(capped.allSatisfy { $0.quality == .p720 })
+    #expect(capped.allSatisfy { $0.quality != .p1080 })
     // And the first rung matches what the OFFER declares for that quality.
     #expect(AdaptiveQuality.ladder(ceiling: .p1080).first?.bitrate == MirrorQuality.p1080.bitrate)
     #expect(capped.first?.bitrate == MirrorQuality.p720.bitrate)
+}
+
+@Test func everyLadderDescendsInBitsBecauseDownMustMeanLighter() {
+    // A link that can't carry rung N certainly can't carry more than it —
+    // whatever the resolutions involved, "down" must cost fewer Mbps.
+    for ceiling in MirrorQuality.allCases {
+        let rungs = AdaptiveQuality.ladder(ceiling: ceiling)
+        let bitrates = rungs.map(\.bitrate)
+        #expect(bitrates == bitrates.sorted(by: >))
+    }
+}
+
+@Test func ultraTradesPixelsForHeadroomNotBitsForBits() {
+    // The Ultra ladder is all 480p, and its top rung carries MORE bits per
+    // pixel than lean 720p would — H.264 starved of bits shatters on motion.
+    let ultra = AdaptiveQuality.ladder(
+        ceiling: MirrorPreset.ultra.quality,
+        maxBitrate: MirrorPreset.ultra.bitrateCap
+    )
+    #expect(ultra.allSatisfy { $0.quality == .p480 })
+    #expect(ultra.first?.bitrate == 3_500_000)
+    // While the shared floor under the bigger ladders goes BELOW 720p@2 —
+    // the only honest way down from there.
+    let floor = AdaptiveQuality.ladder(ceiling: .p1080)
+    #expect(floor.last == QualityRung(quality: .p480, bitrate: 1_200_000))
 }
 
 @Test func aLevelsMbpsTargetTrimsTheTopOfTheLadder() {
@@ -44,7 +69,7 @@ private extension AdaptiveRateController {
     #expect(balanced.allSatisfy { $0.bitrate <= 6_000_000 })
     // A cap below every rung still leaves the floor to stand on.
     let floor = AdaptiveQuality.ladder(ceiling: .p720, maxBitrate: 1)
-    #expect(floor == [QualityRung(quality: .p720, bitrate: 2_000_000)])
+    #expect(floor == [QualityRung(quality: .p480, bitrate: 1_200_000)])
 }
 
 @Test func sustainedLossStepsDownASingleBlipDoesNot() {
@@ -76,11 +101,11 @@ private extension AdaptiveRateController {
     controller.settle()
     var last: QualityRung?
     // Keep the link bad; each drop has a cooldown to run off.
-    for _ in 0..<40 {
+    for _ in 0..<50 {
         if let rung = controller.badTick() { last = rung }
     }
-    #expect(last?.quality == .p720)
-    #expect(last?.bitrate == 2_000_000)   // pinned to the floor, not past it
+    #expect(last?.quality == .p480)
+    #expect(last?.bitrate == 1_200_000)   // pinned to the floor, not past it
 }
 
 @Test func aQuietStretchClimbsBackOneRung() {

@@ -214,8 +214,10 @@ public final class CastMirrorSession: @unchecked Sendable {
         } else if quality == .p1080 {
             base = size
         } else {
-            base = (max(2, size.width * 3 / 2 / 2 * 2),
-                    max(2, size.height * 3 / 2 / 2 * 2))
+            let ratio = Double(MirrorQuality.p1080.size.height)
+                / Double(quality.size.height)
+            base = (max(2, Int((Double(size.width) * ratio / 2).rounded()) * 2),
+                    max(2, Int((Double(size.height) * ratio / 2).rounded()) * 2))
         }
         baseSize.withLock { $0 = base }
         currentRung.withLock { $0 = startRung }
