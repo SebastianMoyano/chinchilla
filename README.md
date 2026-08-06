@@ -12,13 +12,11 @@ Administro los Mac de un colegio. La tarea que más se repite es la más aburrid
 
 Quería algo que pudiera dejar instalado y que un profesor pudiera abrir sin saber qué es una caché.
 
-También escribo software, así que la máquina de trabajo tiene otro problema distinto: imágenes de Docker, `node_modules` de proyectos que abandoné, artefactos de compilación. Eso no aparece en ningún limpiador comercial porque no es su público. Como la app ya recorría el disco, agregarlo era barato. El mismo criterio explica el resto: cada módulo entró porque yo tenía ese problema y ya existía la maquinaria para resolverlo.
+También escribo software, así que la máquina de trabajo tiene otro problema distinto: imágenes de Docker, `node_modules` de proyectos que abandoné, artefactos de compilación. Eso no aparece en ningún limpiador comercial porque no es su público. Aproveché que la app ya recorría el disco para agregarlo. El mismo criterio explica el resto: cada módulo entró porque yo tenía ese problema y la infraestructura para resolverlo ya existía.
 
 ## En qué se inspira
 
 En [Mole](https://github.com/tw93/Mole), de tw93: la idea de un limpiador de macOS libre, rápido y sin adornos. Chinchilla no reutiliza su código — está escrita desde cero en Swift — pero le debe el enfoque.
-
-El nombre sigue la broma: las chinchillas se limpian revolcándose en polvo.
 
 ## Qué hace
 
@@ -46,7 +44,7 @@ Esto es la mitad del punto, así que va explícito:
 - **No libera RAM.** El "purge" de memoria no acelera nada en macOS moderno; el sistema ya administra eso mejor que cualquier app.
 - **No muestra FPS inventados** ni promete cuadros por segundo que no puede entregar.
 - **No apaga Spotlight** ni servicios del sistema para simular mejoras.
-- **No borra idiomas** de las apps: rompe la firma y ahorra una miseria.
+- **No borra idiomas** de las apps: invalida la firma de la aplicación y el espacio que recupera es insignificante.
 - **No pide contraseña de administrador** salvo para dos reparaciones puntuales, y lo dice antes.
 - **No infla las cifras.** Lo que reporta es lo que se libera.
 
@@ -58,7 +56,7 @@ Empezó como un pedido simple —mandar un video al televisor sin instalar nada�
 
 El espejo de pantalla usa el receptor de duplicación que traen los dispositivos Chromecast, el mismo que usa Chrome para "Transmitir escritorio": nada que instalar en el televisor y **menos de medio segundo de retraso**, contra los dos o tres segundos del reproductor multimedia normal. Captura con ScreenCaptureKit, codifica H.264 por hardware con VideoToolbox y Opus para el audio, y transporta RTP cifrado con AES-128-CTR, con retransmisión y reportes RTCP.
 
-Si un televisor rechaza ese camino, cae al anterior y lo dice en pantalla.
+Si el televisor no es compatible con el receptor rápido, la app usa automáticamente el reproductor multimedia estándar (con más retraso) y lo indica en la interfaz.
 
 ## Seguridad al borrar
 
@@ -142,32 +140,6 @@ chinchilla status --json            # objeto único y estable (camelCase) para s
   "zombieCount": 0, "mdmEnrolled": false, "smartStatus": "Verified"
 }
 ```
-
-## Instalar con Homebrew (tap propio)
-
-En `packaging/homebrew/chinchilla.rb` está la plantilla del cask. Para publicarlo:
-
-1. Crea un repo público `SebastianMoyano/homebrew-chinchilla` (el prefijo `homebrew-` es obligatorio; el tap se llamará `SebastianMoyano/chinchilla`).
-2. Copia la plantilla a `Casks/chinchilla.rb` en ese repo.
-3. En cada release, reemplaza los dos valores marcados como `PLACEHOLDER`:
-
-   ```bash
-   VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" packaging/Info.plist)
-   shasum -a 256 "dist/Chinchilla-$VERSION.dmg"        # sha256 del DMG que subiste al release
-   # o, si ya está publicado:
-   curl -sL "https://github.com/SebastianMoyano/chinchilla/releases/download/v$VERSION/Chinchilla-$VERSION.dmg" | shasum -a 256
-   ```
-
-4. Commit y push. Los usuarios instalan con:
-
-   ```bash
-   brew tap SebastianMoyano/chinchilla
-   brew install --cask chinchilla
-   ```
-
-El cask instala `Chinchilla.app` en `/Applications` y enlaza el binario como `chinchilla`, así que el CLI queda en el `PATH` sin alias. Antes de subir cambios al tap conviene correr `brew audit --cask --strict chinchilla` y `brew install --cask ./Casks/chinchilla.rb` en local.
-
-> El DMG debe estar firmado y notarizado (`./scripts/release.sh`); Homebrew no evita Gatekeeper.
 
 ## Arquitectura
 
