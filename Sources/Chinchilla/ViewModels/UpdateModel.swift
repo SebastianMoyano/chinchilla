@@ -15,6 +15,10 @@ final class UpdateModel {
     private static let lastCheckKey = "updates.lastCheck"
 
     var availableVersion: String?
+    /// The release notes, cleaned for the confirmation dialog. Release
+    /// bodies are written with a plain-Spanish summary at the top precisely
+    /// so this can show it — the reader is a teacher, not a git log.
+    var availableNotes: String?
     var releaseURL = URL(string: "https://github.com/\(repo)/releases/latest")!
     /// Direct DMG asset of the latest release, when present.
     var dmgURL: URL?
@@ -63,6 +67,7 @@ final class UpdateModel {
             let tag_name: String
             let html_url: String
             let assets: [Asset]
+            let body: String?
         }
         do {
             var request = URLRequest(
@@ -83,6 +88,7 @@ final class UpdateModel {
                 dmgURL = release.assets
                     .first { $0.name.hasSuffix(".dmg") }
                     .flatMap { URL(string: $0.browser_download_url) }
+                availableNotes = Self.displayNotes(from: release.body)
                 withAnimation { availableVersion = latest }
                 if manual { manualResult = nil }
             } else if manual {
@@ -93,6 +99,29 @@ final class UpdateModel {
                 manualResult = String(localized: "Couldn't check for updates.")
             }
         }
+    }
+
+    /// The leading lines of the release body, stripped of markdown noise.
+    /// A `---` line ends the summary — everything below it is changelog
+    /// detail the dialog doesn't need.
+    static func displayNotes(from body: String?) -> String? {
+        guard let body, !body.isEmpty else { return nil }
+        var kept: [String] = []
+        for rawLine in body.replacingOccurrences(of: "\r", with: "")
+            .split(separator: "\n", omittingEmptySubsequences: false) {
+            var line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("---") { break }
+            while line.first == "#" { line.removeFirst() }
+            if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                line = "• " + line.dropFirst(2)
+            }
+            line = line.replacingOccurrences(of: "**", with: "")
+            kept.append(line.trimmingCharacters(in: .whitespaces))
+            if kept.count == 14 { break }
+        }
+        let text = kept.joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : String(text.prefix(1_200))
     }
 
     // MARK: - One-click self-update

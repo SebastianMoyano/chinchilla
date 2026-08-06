@@ -197,6 +197,11 @@
 "Sponsor" = "Apoyar";
 "Get %@" = "Bajar %@";
 "Update to %@" = "Actualizar a %@";
+"Update to version %@?" = "¿Actualizar a la versión %@?";
+"Not now" = "Ahora no";
+"Update Now" = "Actualizar ahora";
+"Downloads the new version, verifies its signature and reopens the app. Under a minute." = "Descarga la versión nueva, comprueba que sea auténtica y vuelve a abrir la app. Menos de un minuto.";
+"Shows what's new and asks before installing anything." = "Muestra las novedades y pregunta antes de instalar nada.";
 "Updating…" = "Actualizando…";
 "Downloading…" = "Descargando…";
 "Installing…" = "Instalando…";

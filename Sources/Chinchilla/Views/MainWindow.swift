@@ -123,6 +123,7 @@ private struct ScreenToolbarItem: View {
 /// set of items changes, and that rebuild is what the app was drowning in.
 private struct UpdateToolbarItem: View {
     @Environment(AppState.self) private var appState
+    @State private var confirming = false
 
     var body: some View {
         let updates = appState.updates
@@ -136,14 +137,26 @@ private struct UpdateToolbarItem: View {
             }
         default:
             if let version = updates.availableVersion {
-                // One click downloads, verifies, installs and relaunches —
-                // no dialogs ever.
+                // Asks first, with the release notes in plain words — an
+                // update that installs itself the instant you touch the
+                // button reads as the app deciding for you.
                 Button {
-                    updates.installUpdate()
+                    confirming = true
                 } label: {
                     Label("Update to \(version)", systemImage: "arrow.down.circle")
                 }
-                .help("One click: downloads the new version, verifies its signature, installs it and relaunches. No rush.")
+                .help("Shows what's new and asks before installing anything.")
+                .popover(isPresented: $confirming, arrowEdge: .bottom) {
+                    UpdateConfirmView(
+                        version: version,
+                        notes: updates.availableNotes
+                    ) {
+                        confirming = false
+                        updates.installUpdate()
+                    } later: {
+                        confirming = false
+                    }
+                }
             } else if let result = updates.manualResult {
                 Text(verbatim: result)
                     .font(.caption)
@@ -154,6 +167,45 @@ private struct UpdateToolbarItem: View {
                 Color.clear.frame(width: 0, height: 0)
             }
         }
+    }
+}
+
+/// The pre-update question: version, what's new in plain words, and two
+/// buttons. The notes come straight from the GitHub release body, whose
+/// leading section is written in simple Spanish for exactly this dialog.
+private struct UpdateConfirmView: View {
+    let version: String
+    let notes: String?
+    let install: () -> Void
+    let later: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Update to version \(version)?")
+                .font(.headline)
+            if let notes {
+                ScrollView {
+                    Text(verbatim: notes)
+                        .font(.callout)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .frame(maxHeight: 190)
+            }
+            Text("Downloads the new version, verifies its signature and reopens the app. Under a minute.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Not now", action: later)
+                Button("Update Now", action: install)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 380)
     }
 }
 
