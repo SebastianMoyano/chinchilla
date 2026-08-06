@@ -28,11 +28,16 @@ public struct QualityRung: Sendable, Equatable {
 /// coherent point on that trade; the adaptive ladder then works downward from
 /// the level's ceiling when the Wi-Fi disagrees.
 public enum MirrorPreset: String, Sendable, CaseIterable, Identifiable {
-    /// Ultra follows the H.264 playbook, because H.264 is what the Cast
-    /// mirror receiver actually negotiates (no Mac has an AV1 hardware
-    /// encoder, and HEVC isn't in the receiver's vocabulary): at ultra-low
-    /// delay you drop *pixels*, not bits — 480p with bitrate headroom
-    /// survives fast motion where a starved 720p shatters into blocks.
+    /// Ultra is tuned for what ultra-low delay is actually used for: the TV
+    /// as a desktop monitor. That content is text and mostly-still frames,
+    /// where resolution decides legibility and the encoder's long GOP makes
+    /// a quiet screen nearly free — so Ultra keeps 720p and gives up bits
+    /// instead. H.264's low-bitrate blockiness only shows during motion
+    /// bursts and heals when the screen settles; unreadable 480p text on a
+    /// 65-inch panel is constant. (The "fewer pixels with headroom" trade
+    /// belongs to game-style constant motion — measured on a real TV, text
+    /// lost more at 480p than motion lost at lean 720p.) When the Wi-Fi
+    /// truly chokes, the shared 480p floor is still there below.
     case bestPicture, balanced, responsive, ultra
     public var id: String { rawValue }
 
@@ -40,8 +45,7 @@ public enum MirrorPreset: String, Sendable, CaseIterable, Identifiable {
     public var quality: MirrorQuality {
         switch self {
         case .bestPicture, .balanced: .p1080
-        case .responsive: .p720
-        case .ultra: .p480
+        case .responsive, .ultra: .p720
         }
     }
 
@@ -51,7 +55,7 @@ public enum MirrorPreset: String, Sendable, CaseIterable, Identifiable {
         case .bestPicture: 8_000_000
         case .balanced: 6_000_000
         case .responsive: 4_000_000
-        case .ultra: 3_500_000
+        case .ultra: 2_000_000
         }
     }
 
@@ -83,28 +87,29 @@ public enum AdaptiveQuality {
         let p1080 = [8_000_000, 6_000_000, 4_500_000].map {
             QualityRung(quality: .p1080, bitrate: $0)
         }
-        let p720 = [4_000_000, 3_000_000, 2_000_000].map {
+        // 1.5 exists for Ultra's sake: measured on a real 65-inch panel,
+        // text legibility at 720p beats motion robustness at 480p for
+        // desktop mirroring, so the ladder holds resolution one rung longer
+        // before shedding pixels.
+        let p720 = [4_000_000, 3_000_000, 2_000_000, 1_500_000].map {
             QualityRung(quality: .p720, bitrate: $0)
         }
-        // 480p plays two different roles, so it gets two different bitrate
-        // sets. As the *floor* of the bigger ladders it sits below 720p@2 —
-        // rungs must descend in Mbps, because a link that can't carry 2 Mbps
-        // certainly can't carry more, and going lower than 2 on H.264 means
-        // shedding pixels so the bits that remain aren't starved. As the
-        // *ceiling* of the Ultra level the constraint is latency, not
-        // bandwidth: fewer pixels WITH bitrate headroom, because a lean
-        // 480p would shatter on motion just like a lean 720p does.
-        let p480Floor = [1_800_000, 1_200_000].map {
-            QualityRung(quality: .p480, bitrate: $0)
-        }
-        let p480Ultra = [3_500_000, 2_500_000, 1_500_000].map {
+        // The shared floor. Rungs must descend in Mbps — a link that can't
+        // carry 1.5 certainly can't carry more — and below that the only
+        // honest move is shedding pixels so the bits that remain aren't
+        // starved.
+        let p480Floor = [1_200_000, 800_000].map {
             QualityRung(quality: .p480, bitrate: $0)
         }
         let full: [QualityRung]
         switch ceiling {
         case .p1080: full = p1080 + p720 + p480Floor
         case .p720: full = p720 + p480Floor
-        case .p480: full = p480Ultra
+        // A 480p ceiling has no preset behind it; if a caller asks for it,
+        // it's the constant-motion trade — pixels for headroom.
+        case .p480: full = [2_500_000, 1_800_000].map {
+            QualityRung(quality: .p480, bitrate: $0)
+        } + p480Floor
         }
         // A level's Mbps target trims the top; the floor always survives, so
         // a cap below every rung still leaves somewhere to stand.

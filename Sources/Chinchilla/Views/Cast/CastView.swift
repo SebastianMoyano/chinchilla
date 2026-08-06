@@ -19,7 +19,7 @@ extension MirrorPreset {
         case .bestPicture: "1080p · up to 8 Mbps · the TV runs ~0.4 s behind"
         case .balanced: "1080p · up to 6 Mbps · ~0.2 s behind"
         case .responsive: "720p · up to 4 Mbps · ~0.1 s behind — for using the TV like a monitor"
-        case .ultra: "480p · up to 3.5 Mbps · ~0.05 s behind — sharpness traded for the lowest delay this protocol can do"
+        case .ultra: "720p · up to 2 Mbps · ~0.05 s behind — lean and immediate; text stays readable, fast motion may briefly block up"
         }
     }
 }

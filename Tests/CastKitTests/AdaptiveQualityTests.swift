@@ -44,19 +44,21 @@ private extension AdaptiveRateController {
     }
 }
 
-@Test func ultraTradesPixelsForHeadroomNotBitsForBits() {
-    // The Ultra ladder is all 480p, and its top rung carries MORE bits per
-    // pixel than lean 720p would — H.264 starved of bits shatters on motion.
+@Test func ultraKeepsResolutionAndGivesUpBitsInstead() {
+    // Desktop mirroring is text and still frames: 720p lean stays readable
+    // where 480p with headroom does not (measured on a 65-inch panel), and
+    // blockiness during motion heals while soft text is constant.
     let ultra = AdaptiveQuality.ladder(
         ceiling: MirrorPreset.ultra.quality,
         maxBitrate: MirrorPreset.ultra.bitrateCap
     )
-    #expect(ultra.allSatisfy { $0.quality == .p480 })
-    #expect(ultra.first?.bitrate == 3_500_000)
-    // While the shared floor under the bigger ladders goes BELOW 720p@2 —
-    // the only honest way down from there.
+    #expect(ultra.first == QualityRung(quality: .p720, bitrate: 2_000_000))
+    #expect(ultra.contains(QualityRung(quality: .p720, bitrate: 1_500_000)))
+    // The 480p floor is still underneath for a truly choking link.
+    #expect(ultra.last == QualityRung(quality: .p480, bitrate: 800_000))
+    // And the shared floor under every big ladder bottoms out the same way.
     let floor = AdaptiveQuality.ladder(ceiling: .p1080)
-    #expect(floor.last == QualityRung(quality: .p480, bitrate: 1_200_000))
+    #expect(floor.last == QualityRung(quality: .p480, bitrate: 800_000))
 }
 
 @Test func aLevelsMbpsTargetTrimsTheTopOfTheLadder() {
@@ -69,7 +71,7 @@ private extension AdaptiveRateController {
     #expect(balanced.allSatisfy { $0.bitrate <= 6_000_000 })
     // A cap below every rung still leaves the floor to stand on.
     let floor = AdaptiveQuality.ladder(ceiling: .p720, maxBitrate: 1)
-    #expect(floor == [QualityRung(quality: .p480, bitrate: 1_200_000)])
+    #expect(floor == [QualityRung(quality: .p480, bitrate: 800_000)])
 }
 
 @Test func sustainedLossStepsDownASingleBlipDoesNot() {
@@ -105,7 +107,7 @@ private extension AdaptiveRateController {
         if let rung = controller.badTick() { last = rung }
     }
     #expect(last?.quality == .p480)
-    #expect(last?.bitrate == 1_200_000)   // pinned to the floor, not past it
+    #expect(last?.bitrate == 800_000)   // pinned to the floor, not past it
 }
 
 @Test func aQuietStretchClimbsBackOneRung() {
