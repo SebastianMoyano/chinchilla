@@ -132,24 +132,13 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
             // The virtual display is a fixed 1080p desktop; the stream is
             // the quality's box, scaled down from it by the capture.
             return quality.size
-        case .window(let windowID, _, _):
-            let content = try await withTimeout(.seconds(8), "Screen capture") {
-                Unchecked(try await SCShareableContent.excludingDesktopWindows(
-                    true, onScreenWindowsOnly: true
-                ))
-            }.value
-            guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
-                throw NSError(domain: "CastKit", code: 11, userInfo: [
-                    NSLocalizedDescriptionKey: String(
-                        localized: "That window isn't open any more."
-                    ),
-                ])
-            }
-            let (boxWidth, boxHeight) = quality.size
-            let scale = min(Double(boxWidth) / window.frame.width,
-                            Double(boxHeight) / window.frame.height, 1)
-            return (max(2, Int((window.frame.width * scale / 2).rounded()) * 2),
-                    max(2, Int((window.frame.height * scale / 2).rounded()) * 2))
+        case .window:
+            // The stream is the full quality box and the window is fitted
+            // inside it (letterboxed). Sizing the stream to the window's
+            // shape instead meant the first resize changed the aspect and
+            // the capture started cropping — a bar of the window gone off
+            // the top or the side, depending on which way it was resized.
+            return quality.size
         }
     }
 
@@ -280,8 +269,11 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
             (width, height) = quality.size
         }
 
-        // A single window: size the stream to the window, so the TV shows it
-        // filling the screen instead of a small rectangle on a big desktop.
+        // A single window: the stream is the full quality box and the window
+        // is fitted inside it, letterboxed. The whole window is always on
+        // the TV — resize it and the fit follows; sizing the stream to the
+        // window's shape instead meant any later resize changed the aspect
+        // and the capture cropped a slice off the top or the side.
         var windowFilter: SCContentFilter?
         if case .window(let windowID, _, _) = source {
             let content = try await withTimeout(.seconds(8), "Screen capture") {
@@ -296,11 +288,7 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
                     ),
                 ])
             }
-            let (box, boxHeight) = quality.size
-            let scale = min(Double(box) / window.frame.width,
-                            Double(boxHeight) / window.frame.height, 1)
-            width = max(2, Int((window.frame.width * scale / 2).rounded()) * 2)
-            height = max(2, Int((window.frame.height * scale / 2).rounded()) * 2)
+            (width, height) = quality.size
             windowFilter = SCContentFilter(desktopIndependentWindow: window)
         }
 
@@ -322,6 +310,14 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
         configuration.capturesAudio = includeAudio
         configuration.sampleRate = 48_000
         configuration.channelCount = 2
+        if case .window = source {
+            // Fit, don't fill: the window scales into the box with black
+            // bars, whatever shape the user drags it to, and the drop
+            // shadow doesn't waste box space.
+            configuration.scalesToFit = true
+            configuration.preservesAspectRatio = true
+            configuration.ignoreShadowsSingleWindow = true
+        }
 
         // Every source case above set one of the two; the guard is belt and
         // braces, not a reachable path.
