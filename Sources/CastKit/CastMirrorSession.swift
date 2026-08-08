@@ -208,13 +208,11 @@ public final class CastMirrorSession: @unchecked Sendable {
         encoder.onSample = { [weak sender] sample in sender?.send(sample) }
         activeEncoder.withLock { $0 = encoder }
         // Aspect reference at the 1080p box, so a mid-stream level change can
-        // raise the capture back up — the source display has the detail. The
-        // virtual display is the exception: it *is* its created size, and
-        // upscaling it would be interpolation dressed as quality.
+        // raise the capture back up — every source has the detail: real
+        // displays are at least that dense, and the virtual desktop is
+        // created at 1080p regardless of the stream's box.
         let base: (width: Int, height: Int)
-        if case .extendedDisplay = source {
-            base = size
-        } else if quality == .p1080 {
+        if quality == .p1080 {
             base = size
         } else {
             let ratio = Double(MirrorQuality.p1080.size.height)

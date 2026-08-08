@@ -129,8 +129,8 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
         case .wholeScreen:
             return captureSize(for: quality, display: try await mainDisplay())
         case .extendedDisplay:
-            // The virtual display is created at the quality's own size, so
-            // the desktop matches what the TV will show pixel for pixel.
+            // The virtual display is a fixed 1080p desktop; the stream is
+            // the quality's box, scaled down from it by the capture.
             return quality.size
         case .window(let windowID, _, _):
             let content = try await withTimeout(.seconds(8), "Screen capture") {
@@ -188,10 +188,14 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
             }
     }
 
+    /// The extra desktop's fixed size — a standard mode, independent of the
+    /// stream quality (see the creation comment in `start`).
+    static let virtualDisplaySize = (width: 1920, height: 1080)
+
     /// Moves an already-running extra desktop to the other side.
     public func repositionVirtualDisplay(on side: ExtendedSide, quality: MirrorQuality) {
         guard let display = virtualDisplay, display.isActive else { return }
-        Self.place(display: display.displayID, on: side, size: quality.size)
+        Self.place(display: display.displayID, on: side, size: Self.virtualDisplaySize)
     }
 
     /// Puts the virtual display beside the real one. `kCGConfigureForSession`
@@ -234,8 +238,16 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
 
         // A second desktop: bring the display up first, then capture it like
         // any other. macOS moves windows onto it the moment it appears.
+        //
+        // Always created at 1080p, whatever quality the *stream* runs at.
+        // Creating it at the level's box (720p for the responsive levels)
+        // gave the user a chunky desktop with oversized apps, and handed
+        // Mission Control a non-standard display mode it visibly choked on
+        // (black screen on the swipe-up gesture). The desktop stays a normal
+        // 1080p; SCStream scales the capture down to whatever the ladder
+        // asks for.
         if case .extendedDisplay = source {
-            let (w, h) = quality.size
+            let (w, h) = Self.virtualDisplaySize
             let virtual = ChinchillaVirtualDisplay(
                 name: "Chinchilla TV", width: UInt32(w), height: UInt32(h), refreshRate: 60
             )
@@ -264,8 +276,8 @@ public final class ScreenStreamer: NSObject, SCStreamOutput, SCStreamDelegate, @
                 ])
             }
             chosenDisplay = scDisplay
-            width = w
-            height = h
+            // The stream is the level's box; the desktop stays 1080p.
+            (width, height) = quality.size
         }
 
         // A single window: size the stream to the window, so the TV shows it
