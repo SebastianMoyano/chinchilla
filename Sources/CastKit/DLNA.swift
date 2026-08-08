@@ -18,10 +18,28 @@ public enum SSDP {
     private static let address = "239.255.255.250"
     private static let port: UInt16 = 1900
 
+    /// Sends an M-SEARCH for DIAL devices — the discovery path Chrome uses
+    /// alongside mDNS. Android TVs in network standby answer SSDP far more
+    /// reliably than they answer mDNS queries, so a Chromecast that blinks
+    /// in and out of the Bonjour browse usually still shows up here.
+    public static func discoverDIAL(timeout: TimeInterval = 4) async -> [URL] {
+        await search(["urn:dial-multiscreen-org:service:dial:1"], timeout: timeout)
+    }
+
     /// Sends an M-SEARCH for MediaRenderers and collects LOCATION URLs.
-    /// Uses a BSD socket (multicast UDP) on a background thread — no
-    /// blocking work ever reaches the cooperative pool.
     public static func discoverRenderers(timeout: TimeInterval = 4) async -> [URL] {
+        // Ask for MediaRenderers, and also for root devices (some TVs
+        // only answer the broader query).
+        await search([
+            "urn:schemas-upnp-org:device:MediaRenderer:1",
+            "upnp:rootdevice",
+        ], timeout: timeout)
+    }
+
+    /// One M-SEARCH round for the given search targets, collecting LOCATION
+    /// URLs. Uses a BSD socket (multicast UDP) on a background thread — no
+    /// blocking work ever reaches the cooperative pool.
+    private static func search(_ targets: [String], timeout: TimeInterval) async -> [URL] {
         await Blocking.run {
             var found = Set<String>()
             let fd = socket(AF_INET, SOCK_DGRAM, 0)
@@ -50,12 +68,6 @@ public enum SSDP {
             destination.sin_port = port.bigEndian
             inet_pton(AF_INET, address, &destination.sin_addr)
 
-            // Ask for MediaRenderers, and also for root devices (some TVs
-            // only answer the broader query).
-            let targets = [
-                "urn:schemas-upnp-org:device:MediaRenderer:1",
-                "upnp:rootdevice",
-            ]
             for target in targets {
                 let request = """
                 M-SEARCH * HTTP/1.1\r
@@ -105,6 +117,16 @@ public enum SSDP {
 // MARK: - Device description
 
 public enum UPnPDescription {
+    /// Just the human name from a device description — for devices found
+    /// via DIAL, where all we need is something to put in the list.
+    public static func friendlyName(from location: URL) async -> String? {
+        var request = URLRequest(url: location)
+        request.timeoutInterval = 5
+        guard let (data, _) = try? await URLSession.shared.data(for: request),
+              let xml = String(data: data, encoding: .utf8) else { return nil }
+        return value(of: "friendlyName", in: xml)
+    }
+
     /// Fetches and parses a device description into a renderer, or nil if
     /// the device has no AVTransport service (i.e. can't play media).
     public static func fetchRenderer(from location: URL) async -> DLNARenderer? {

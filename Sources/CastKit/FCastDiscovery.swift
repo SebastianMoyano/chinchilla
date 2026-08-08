@@ -77,6 +77,13 @@ public final class FCastDiscovery: @unchecked Sendable {
 public final class GoogleCastDiscovery: @unchecked Sendable {
     private let queue = DispatchQueue(label: "cast.googlecast.discovery")
     private var browser: NWBrowser?
+    /// Service instance name → resolved IP. An Android TV in standby
+    /// announces over mDNS but can be slow to accept the TCP connection
+    /// that resolves its address — one missed 3-second window used to drop
+    /// the TV from the list entirely. The cache outlives browse restarts
+    /// (panel closed and reopened), so a TV resolved once stays listed.
+    private let resolved = Locked<[String: String]>([:])
+    private let resolveTask = Locked<Task<Void, Never>?>(nil)
 
     public init() {}
 
@@ -90,23 +97,72 @@ public final class GoogleCastDiscovery: @unchecked Sendable {
             for: .bonjour(type: "_googlecast._tcp", domain: nil),
             using: NWParameters(tls: nil, tcp: NWProtocolTCP.Options())
         )
+        let resolved = self.resolved
+        let resolveTask = self.resolveTask
         browser.browseResultsChangedHandler = { results, _ in
-            Task {
-                var devices: [GoogleCastDevice] = []
-                for result in results {
-                    guard case .service(let name, _, _, _) = result.endpoint else { continue }
+            // One resolution task at a time: Bonjour fires change events in
+            // bursts, and each used to spawn its own serial re-resolution of
+            // every device — overlapping connection storms, with one
+            // unreachable TV stalling each pass by its full timeout.
+            let previous = resolveTask.withLock { current -> Task<Void, Never>? in
+                let old = current
+                current = nil
+                return old
+            }
+            previous?.cancel()
+
+            let entries: [(name: String, friendly: String, endpoint: NWEndpoint)] =
+                results.compactMap { result in
+                    guard case .service(let name, _, _, _) = result.endpoint else { return nil }
                     // TXT record carries the human-friendly name ("fn").
                     var friendly = Self.prettify(name)
                     if case .bonjour(let txt) = result.metadata,
                        let fn = txt["fn"], !fn.isEmpty {
                         friendly = fn
                     }
-                    if let host = await Self.resolveHost(result.endpoint) {
-                        devices.append(GoogleCastDevice(name: friendly, host: host))
-                    }
+                    return (name, friendly, result.endpoint)
                 }
-                onDevices(devices.sorted { $0.name < $1.name })
+
+            let task = Task {
+                func emit() {
+                    let hosts = resolved.withLock { $0 }
+                    let devices = entries.compactMap { entry -> GoogleCastDevice? in
+                        guard let host = hosts[entry.name] else { return nil }
+                        return GoogleCastDevice(name: entry.friendly, host: host)
+                    }
+                    onDevices(devices.sorted { $0.name < $1.name })
+                }
+                // What's cached shows instantly; the rest is resolved in
+                // parallel, and a device that misses one attempt gets two
+                // more chances before waiting for the next mDNS event —
+                // a TV waking from standby often takes a few seconds to
+                // accept its first connection.
+                emit()
+                for attempt in 0..<3 {
+                    let pending = resolved.withLock { hosts in
+                        entries.filter { hosts[$0.name] == nil }
+                    }
+                    if pending.isEmpty || Task.isCancelled { return }
+                    if attempt > 0 {
+                        try? await Task.sleep(for: .seconds(5))
+                        if Task.isCancelled { return }
+                    }
+                    await withTaskGroup(of: (String, String?).self) { group in
+                        for entry in pending {
+                            group.addTask {
+                                (entry.name, await Self.resolveHost(entry.endpoint))
+                            }
+                        }
+                        for await (name, host) in group {
+                            if let host {
+                                resolved.withLock { $0[name] = host }
+                            }
+                        }
+                    }
+                    emit()
+                }
             }
+            resolveTask.withLock { $0 = task }
         }
         self.browser = browser
         browser.start(queue: queue)
@@ -115,7 +171,28 @@ public final class GoogleCastDiscovery: @unchecked Sendable {
     public func stop() {
         browser?.cancel()
         browser = nil
+        let task = resolveTask.withLock { current -> Task<Void, Never>? in
+            let old = current
+            current = nil
+            return old
+        }
+        task?.cancel()
+        // The `resolved` cache deliberately survives: IPs rarely change
+        // within a session, and it's what makes the list repopulate
+        // instantly when the panel reopens.
     }
+
+    /// True when something is answering on the Cast port at this address —
+    /// used to re-list remembered TVs that mDNS is currently blind to.
+    public static func probeCastPort(host: String, timeout: Double = 1.5) async -> Bool {
+        guard let port = NWEndpoint.Port(rawValue: 8009) else { return false }
+        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(host), port: port)
+        return await resolveHost(endpoint, timeout: timeout) != nil
+    }
+
+    /// One shared queue for resolution connections — a fresh queue per
+    /// attempt was an allocation the resolver paid on every mDNS burst.
+    private static let resolveQueue = DispatchQueue(label: "cast.resolve")
 
     /// mDNS instance names look like "4K-SMART-TV-24b1993e381d…" — drop the
     /// trailing UUID and restore spaces.
@@ -131,7 +208,7 @@ public final class GoogleCastDiscovery: @unchecked Sendable {
     /// Resolves a Bonjour endpoint to an IPv4 literal by opening (and
     /// immediately cancelling) a connection — Network.framework exposes the
     /// resolved path this way.
-    static func resolveHost(_ endpoint: NWEndpoint) async -> String? {
+    static func resolveHost(_ endpoint: NWEndpoint, timeout: Double = 3) async -> String? {
         // One-shot guard shared by the state handler and the timeout.
         let resumed = Locked(false)
         return await withCheckedContinuation { continuation in
@@ -161,9 +238,9 @@ public final class GoogleCastDiscovery: @unchecked Sendable {
                     break
                 }
             }
-            connection.start(queue: DispatchQueue(label: "cast.resolve"))
+            connection.start(queue: Self.resolveQueue)
             // Never hang the browse on one unreachable device.
-            DispatchQueue.global().asyncAfter(deadline: .now() + 3) { finish(nil) }
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { finish(nil) }
         }
     }
 }

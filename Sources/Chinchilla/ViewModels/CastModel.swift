@@ -132,6 +132,15 @@ final class CastModel {
     private var airplayDevices: [AirPlayDevice] = []
     private let airplayDiscovery = AirPlayDiscovery()
     private var awaitingFetch = false
+    /// Cast devices found by SSDP/DIAL — the discovery path Chrome uses
+    /// alongside mDNS. Android TVs in standby answer SSDP far more reliably
+    /// than mDNS, which is why the TV "sometimes" appeared: it was always
+    /// there, mDNS just blinked.
+    private var dialCastDevices: [GoogleCastDevice] = []
+    /// TVs this Mac has cast to before, re-listed when a direct probe of the
+    /// Cast port answers even though neither mDNS nor SSDP saw them.
+    private var rememberedCastDevices: [GoogleCastDevice] = []
+    private static let rememberedKey = "cast.rememberedDevices"
 
     // MARK: Screen mirroring
     var mirroring = false
@@ -636,16 +645,51 @@ final class CastModel {
         searchedAndEmpty = false
         lastSweep = Date()
         startBrowsers()
-        // DLNA: one SSDP sweep per refresh.
+        // One SSDP sweep per refresh: MediaRenderers for DLNA, and DIAL for
+        // the Chromecasts whose mDNS announcements blink (standby TVs).
         Task {
-            let locations = await SSDP.discoverRenderers()
+            async let rendererLocations = SSDP.discoverRenderers()
+            async let dialLocations = SSDP.discoverDIAL()
+
             var renderers: [DLNARenderer] = []
-            for location in locations {
+            for location in await rendererLocations {
                 if let renderer = await UPnPDescription.fetchRenderer(from: location) {
                     renderers.append(renderer)
                 }
             }
             dlnaRenderers = renderers.sorted { $0.name < $1.name }
+            rebuildTargets()
+
+            // DIAL answers with a LOCATION on the TV's IP; anything there
+            // that also answers on the Cast port is a Chromecast, whether or
+            // not mDNS is currently admitting it exists.
+            var viaDial: [GoogleCastDevice] = []
+            for location in await dialLocations {
+                guard let host = location.host,
+                      !castDevices.contains(where: { $0.host == host }),
+                      !viaDial.contains(where: { $0.host == host })
+                else { continue }
+                guard await GoogleCastDiscovery.probeCastPort(host: host) else { continue }
+                let name = await UPnPDescription.friendlyName(from: location) ?? host
+                viaDial.append(GoogleCastDevice(name: name, host: host))
+            }
+            dialCastDevices = viaDial
+            remember(viaDial)
+            rebuildTargets()
+
+            // Last resort: TVs we've cast to before that nothing announced
+            // this sweep — a direct probe of the remembered IP still finds a
+            // TV whose network filters multicast entirely.
+            let seen = Set((castDevices + dialCastDevices).map(\.host))
+            let known = UserDefaults.standard.dictionary(forKey: Self.rememberedKey)
+                as? [String: String] ?? [:]
+            var probed: [GoogleCastDevice] = []
+            for (name, host) in known where !seen.contains(host) {
+                if await GoogleCastDiscovery.probeCastPort(host: host) {
+                    probed.append(GoogleCastDevice(name: name, host: host))
+                }
+            }
+            rememberedCastDevices = probed
             rebuildTargets()
             searchedAndEmpty = targets.isEmpty
         }
@@ -678,16 +722,36 @@ final class CastModel {
         castDiscovery.start { [weak self] devices in
             Task { @MainActor in
                 self?.castDevices = devices
+                self?.remember(devices)
                 self?.rebuildTargets()
             }
         }
+    }
+
+    /// name→host of every cast device ever resolved, capped small. The point
+    /// is the bad day: mDNS filtered by the router, SSDP snooped away — a
+    /// direct probe of a remembered IP still finds the TV.
+    private func remember(_ devices: [GoogleCastDevice]) {
+        guard !devices.isEmpty else { return }
+        var known = UserDefaults.standard.dictionary(forKey: Self.rememberedKey)
+            as? [String: String] ?? [:]
+        for device in devices { known[device.name] = device.host }
+        while known.count > 8 { known.removeValue(forKey: known.keys.first!) }
+        UserDefaults.standard.set(known, forKey: Self.rememberedKey)
     }
 
     private func rebuildTargets() {
         var list: [CastTarget] = fcastDevices.map {
             CastTarget(id: "fcast:\($0.name)", name: $0.name, kind: .fcast($0))
         }
-        list += castDevices.map {
+        // mDNS first, then DIAL, then remembered — same host appears once,
+        // and the freshest source names it.
+        var castAll = castDevices
+        for device in dialCastDevices + rememberedCastDevices
+        where !castAll.contains(where: { $0.host == device.host }) {
+            castAll.append(device)
+        }
+        list += castAll.map {
             CastTarget(id: "cast:\($0.id)", name: $0.name, kind: .googlecast($0))
         }
         list += airplayDevices.map {
