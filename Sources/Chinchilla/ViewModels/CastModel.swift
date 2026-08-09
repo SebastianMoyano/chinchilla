@@ -470,6 +470,15 @@ final class CastModel {
                     mirrorError = String(localized: "Couldn't start the local server.")
                     return
                 }
+                // DLNA takes a different container entirely: hand-rolled
+                // MPEG-TS, the broadcast format every TV's tuner pipeline
+                // decodes without an index — the rolling fMP4 below needs a
+                // player that understands "video with no end", and the DLNA
+                // sets that only handle finished files proved they don't.
+                if case .dlna(let renderer) = target.kind {
+                    await startDLNAMirror(renderer: renderer, ip: ip, generation: generation)
+                    return
+                }
                 refreshMacAddress(ip)
                 // Two ways to feed the TV:
                 //  • progressive fMP4 — one long-lived response, the same
@@ -551,35 +560,59 @@ final class CastModel {
                         container: "application/vnd.apple.mpegurl",
                         url: "\(base)/stream.m3u8"
                     ))
-                case .dlna(let renderer):
-                    // Experimental: the rolling in-RAM stream, handed to
-                    // AVTransport as if it were a file. Plenty of sets play
-                    // it (buffering like a movie — expect seconds of delay);
-                    // the rest either reject the SOAP call or accept and sit
-                    // at 0:00 forever, and both get an honest message.
-                    mirrorUsingFallback = true
-                    do {
-                        try await DLNAControl.play(
-                            renderer, url: "\(base)/live.mp4",
-                            title: String(localized: "Mac screen"), mime: "video/mp4"
-                        )
-                        startDLNAPolling(renderer)
-                        try? await Task.sleep(for: .seconds(12))
-                        if mirroring, mirrorGeneration == generation, playbackTime <= 0 {
-                            mirrorError = String(localized: "This TV accepted the stream but isn't playing it — its DLNA player can only handle finished files.")
-                            stopMirroring()
-                        }
-                    } catch {
-                        mirrorError = String(localized: "This TV rejected the live stream — its DLNA player can only handle finished files.")
-                        stopMirroring()
-                    }
-                case .airplay:
-                    break      // not ours to drive
+                case .dlna, .airplay:
+                    break      // DLNA branched off above; AirPlay isn't ours
                 }
             } catch {
                 mirrorError = error.localizedDescription
                 await streamer.stop()
             }
+        }
+    }
+
+    private var dlnaMirror: DLNAMirrorSession?
+
+    /// Experimental mirror for DLNA-only sets, in MPEG-TS. The sets that
+    /// still can't cope fail in two known ways, and both get an honest
+    /// message: rejecting the SOAP call outright, or accepting the URI and
+    /// sitting at 0:00 — caught by the position poll staying at zero.
+    private func startDLNAMirror(renderer: DLNARenderer, ip: String, generation: Int) async {
+        let session = DLNAMirrorSession(
+            server: server, quality: mirrorLevel.quality,
+            includeAudio: mirrorAudio, source: mirrorSource,
+            extendedSide: extendedSide, maxBitrate: mirrorLevel.bitrateCap
+        )
+        session.onStopped = { [weak self] message in
+            Task { @MainActor in
+                self?.mirroring = false
+                if let message { self?.mirrorError = message }
+            }
+        }
+        do {
+            let path = try await session.start()
+            guard mirrorGeneration == generation else {
+                await session.stop()
+                return
+            }
+            dlnaMirror = session
+            mirrorUsingFallback = true
+            castingName = String(localized: "Your screen")
+            mirroring = true
+            playbackState = 1
+            applyMuteIfWanted()
+            try await DLNAControl.play(
+                renderer, url: "http://\(ip):\(server.port)\(path)",
+                title: String(localized: "Mac screen"), mime: "video/mpeg"
+            )
+            startDLNAPolling(renderer)
+            try? await Task.sleep(for: .seconds(12))
+            if mirroring, mirrorGeneration == generation, playbackTime <= 0 {
+                mirrorError = String(localized: "This TV accepted the stream but isn't playing it — its DLNA player can only handle finished files.")
+                stopMirroring()
+            }
+        } catch {
+            mirrorError = String(localized: "This TV rejected the live stream — its DLNA player can only handle finished files.")
+            stopMirroring()
         }
     }
 
@@ -619,11 +652,14 @@ final class CastModel {
         let target = connected
         let fast = fastMirror
         fastMirror = nil
+        let dlna = dlnaMirror
+        dlnaMirror = nil
         Task {
             if let fast {
                 await fast.stop()
                 return
             }
+            await dlna?.stop()
             await streamer.stop()
             // Not just the routes: the listener and every connection it handed
             // out. Leaving it running kept a socket open and its token table
