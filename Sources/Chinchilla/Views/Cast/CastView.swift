@@ -206,8 +206,8 @@ struct CastView: View {
                 } ?? String(localized: "Measuring…"))
             }
 
-            // Sound follows the picture, except when you're still the one
-            // watching — which is exactly what extending means.
+            // Sound follows the picture in every mode; the mute-the-Mac
+            // default is what varies (see CastMode's didSet).
             Toggle(isOn: Binding(
                 get: { model.mirrorAudio },
                 set: { model.mirrorAudio = $0 }

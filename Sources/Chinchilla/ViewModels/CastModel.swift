@@ -208,7 +208,25 @@ final class CastModel {
     /// Set when the fast path wasn't available and we fell back.
     var mirrorUsingFallback = false
     /// Whole screen, or one window parked on the TV while you keep working.
-    var mirrorSource: MirrorSource = .wholeScreen
+    /// A change mid-mirror restarts the stream: a new source means a new
+    /// capture pipeline (different filter, the virtual display coming or
+    /// going), and the old behavior — picker changed, TV didn't, until a
+    /// manual stop/start — read as the control being broken.
+    var mirrorSource: MirrorSource = .wholeScreen {
+        didSet {
+            guard mirrorSource != oldValue else { return }
+            restartMirrorIfActive()
+        }
+    }
+
+    private func restartMirrorIfActive() {
+        guard mirroring || mirrorStarting else { return }
+        stopMirroring()
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            self?.startMirroring()
+        }
+    }
     /// The Mac keeps playing what it sends, because ScreenCaptureKit copies
     /// audio rather than moving it. Duplicating means showing something to a
     /// room, so the room's speakers should have it and the laptop shouldn't.
@@ -272,15 +290,20 @@ final class CastModel {
             }
         }
 
-        /// Sound belongs where the picture is being watched — except when
-        /// you're still the one watching.
-        var sendsAudioByDefault: Bool { self != .extendDisplay }
+        /// Sound belongs where the picture is being watched — in every mode.
+        /// Extending used to keep audio on the Mac ("you're still working
+        /// here"), and field use overruled it: the point of a movie on the
+        /// second desktop is that the room hears it.
+        var sendsAudioByDefault: Bool { true }
     }
 
     var castMode: CastMode = .duplicate {
         didSet {
             mirrorAudio = castMode.sendsAudioByDefault
-            muteMacWhileCasting = castMode == .duplicate
+            // Duplicating or extending: the TV is where things are watched,
+            // so the Mac mutes to avoid the room hearing everything twice.
+            // A single window keeps the Mac's own audio — you're still here.
+            muteMacWhileCasting = castMode != .window
             switch castMode {
             case .duplicate: mirrorSource = .wholeScreen
             case .extendDisplay: mirrorSource = .extendedDisplay
