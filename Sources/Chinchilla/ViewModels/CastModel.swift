@@ -48,7 +48,11 @@ struct CastTarget: Identifiable, Hashable {
     var canMirror: Bool {
         switch kind {
         case .googlecast, .fcast: true
-        case .dlna: false      // DLNA moves files around; it has no live input
+        // DLNA has no live input in its design — but the same rolling
+        // in-RAM fMP4 the fallback path already serves plays fine on many
+        // sets when handed to AVTransport as if it were a file. Offered as
+        // experimental: the ones that can't will say so on screen.
+        case .dlna: true
         case .airplay: false   // macOS owns this route; no app can start it
         }
     }
@@ -70,7 +74,7 @@ struct CastTarget: Identifiable, Hashable {
         switch kind {
         case .googlecast: "Files and screen mirroring · under half a second"
         case .fcast: "Files and screen mirroring · 2–3 seconds"
-        case .dlna: "Files only — this one can't mirror your screen"
+        case .dlna: "Files, and mirroring on sets that accept a live stream — several seconds behind"
         // No model comes back from the browse — Bonjour hands over a name and
         // nothing else here — so one wording for all of them.
         case .airplay: "AirPlay: your Mac drives this one natively, and better than we could"
@@ -247,11 +251,10 @@ final class CastModel {
     /// flight can tell it was cancelled and tear itself down.
     private var mirrorGeneration = 0
 
-    /// Only Chromecast and FCast play HLS; DLNA renderers generally don't.
     var canMirrorToConnectedDevice: Bool {
         switch connected?.kind {
-        case .googlecast, .fcast: true
-        case .dlna, .airplay, nil: false
+        case .googlecast, .fcast, .dlna: true
+        case .airplay, nil: false
         }
     }
 
@@ -548,7 +551,29 @@ final class CastModel {
                         container: "application/vnd.apple.mpegurl",
                         url: "\(base)/stream.m3u8"
                     ))
-                case .dlna, .airplay:
+                case .dlna(let renderer):
+                    // Experimental: the rolling in-RAM stream, handed to
+                    // AVTransport as if it were a file. Plenty of sets play
+                    // it (buffering like a movie — expect seconds of delay);
+                    // the rest either reject the SOAP call or accept and sit
+                    // at 0:00 forever, and both get an honest message.
+                    mirrorUsingFallback = true
+                    do {
+                        try await DLNAControl.play(
+                            renderer, url: "\(base)/live.mp4",
+                            title: String(localized: "Mac screen"), mime: "video/mp4"
+                        )
+                        startDLNAPolling(renderer)
+                        try? await Task.sleep(for: .seconds(12))
+                        if mirroring, mirrorGeneration == generation, playbackTime <= 0 {
+                            mirrorError = String(localized: "This TV accepted the stream but isn't playing it — its DLNA player can only handle finished files.")
+                            stopMirroring()
+                        }
+                    } catch {
+                        mirrorError = String(localized: "This TV rejected the live stream — its DLNA player can only handle finished files.")
+                        stopMirroring()
+                    }
+                case .airplay:
                     break      // not ours to drive
                 }
             } catch {
@@ -590,6 +615,7 @@ final class CastModel {
         mirrorQualityStatus = nil
         mirrorLatency = nil
         playbackState = 0
+        pollTask?.cancel()      // the DLNA mirror polls position too
         let target = connected
         let fast = fastMirror
         fastMirror = nil
@@ -606,6 +632,7 @@ final class CastModel {
             switch target?.kind {
             case .googlecast: await castSession?.stop()
             case .fcast: await session?.stop()
+            case .dlna(let renderer): try? await DLNAControl.stop(renderer)
             default: break
             }
         }

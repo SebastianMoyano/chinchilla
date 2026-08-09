@@ -196,6 +196,13 @@
 "Couldn't check for updates." = "No se pudo comprobar si hay actualizaciones.";
 "Sponsor" = "Apoyar";
 "Get %@" = "Bajar %@";
+/* DLNA experimental mirroring */
+"Files, and mirroring on sets that accept a live stream — several seconds behind" = "Archivos, y espejo en televisores que acepten video en vivo — con varios segundos de retraso";
+"Experimental on this TV: DLNA wasn't built for live video. Many sets play it a few seconds behind; some only handle finished files — if so, it says so here." = "Experimental en este televisor: DLNA no se diseñó para video en vivo. Muchos lo reproducen con unos segundos de retraso; algunos solo aceptan archivos terminados — si es el caso, aquí lo dirá.";
+"This TV accepted the stream but isn't playing it — its DLNA player can only handle finished files." = "El televisor aceptó el video pero no lo reproduce — su reproductor DLNA solo maneja archivos terminados.";
+"This TV rejected the live stream — its DLNA player can only handle finished files." = "El televisor rechazó el video en vivo — su reproductor DLNA solo maneja archivos terminados.";
+"macOS drives this AirPlay device natively — use Screen Mirroring in Control Center." = "macOS maneja este dispositivo AirPlay de forma nativa — usa Duplicar pantalla en el Centro de control.";
+
 "Update to %@" = "Actualizar a %@";
 "Update to version %@?" = "¿Actualizar a la versión %@?";
 "Not now" = "Ahora no";

@@ -525,8 +525,14 @@ struct MirrorCard: View {
                 .disabled(!model.canMirrorToConnectedDevice || model.mirrorStarting)
             }
 
+            if case .dlna = model.connected?.kind {
+                Label("Experimental on this TV: DLNA wasn't built for live video. Many sets play it a few seconds behind; some only handle finished files — if so, it says so here.", systemImage: "testtube.2")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !model.canMirrorToConnectedDevice {
-                Label("This TV is connected over DLNA, which only plays files. Mirroring needs a Chromecast or FCast connection.", systemImage: "info.circle")
+                Label("macOS drives this AirPlay device natively — use Screen Mirroring in Control Center.", systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if !model.screenPermissionGranted {
