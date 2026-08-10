@@ -210,6 +210,11 @@ al lugar donde está resuelta.
 - **`AsyncStream`: `finish()` en *todo* camino terminal** — incluido el FIN
   remoto que llega con la conexión aún `.ready` y no dispara los estados de
   error. Sin finish, los consumidores esperan para siempre.
+- **El `Content-Type` es parte del contrato, no decoración**: un reproductor
+  DLNA coteja la cabecera de la respuesta contra el `protocolInfo` que
+  negoció, y rechazó un MPEG-TS impecable servido con etiqueta `video/mp4`
+  — bytes perfectos, nombre equivocado. Toda ruta de streaming declara su
+  tipo real. → `CastKit/HTTPServer.swift`
 
 ## 10. Media en tiempo real
 
