@@ -80,7 +80,7 @@ public final class DLNAMirrorSession: @unchecked Sendable {
             }
         }
         let encoderBox = self.encoder
-        server.setStreamRoute(Self.path) { writer in
+        server.setStreamRoute(Self.path, contentType: "video/mpeg") { writer in
             subscribers.withLock { $0.append(writer) }
             // The joiner needs tables and an IDR to start decoding.
             encoderBox.withLock { $0 }?.requestKeyFrame()

@@ -183,10 +183,10 @@ public final class CastHTTPServer: @unchecked Sendable {
             .first { $0.lowercased().hasPrefix("range:") }
             .map { String($0.dropFirst("range:".count)).trimmingCharacters(in: .whitespaces) }
 
-        if let streamHandler = streamRoutes[path] {
+        if let (contentType, streamHandler) = streamRoutes[path] {
             // No Content-Length: the body ends when we close the socket.
             let header = self.header(
-                status: "200 OK", contentType: "video/mp4", contentLength: nil,
+                status: "200 OK", contentType: contentType, contentLength: nil,
                 extraHeaders: ["Connection": "close", "Cache-Control": "no-store"]
             )
             connection.send(content: Data(header.utf8), completion: .contentProcessed { _ in })
@@ -272,8 +272,12 @@ public final class CastHTTPServer: @unchecked Sendable {
     }
 
     /// Streaming routes: the handler keeps writing until it returns false
-    /// (used for an endless progressive MP4 — no playlist, no polling).
-    private var streamRoutes: [String: @Sendable (StreamWriter) -> Void] = [:]
+    /// (used for endless progressive streams — no playlist, no polling).
+    /// Each carries its content type: DLNA players check the response
+    /// header against the negotiated protocolInfo, and a TS stream that
+    /// announced itself as video/mp4 was rejected on the spot — perfect
+    /// bytes, wrong label.
+    private var streamRoutes: [String: (contentType: String, handler: @Sendable (StreamWriter) -> Void)] = [:]
 
     public struct StreamWriter: Sendable {
         let send: @Sendable (Data) -> Bool
@@ -282,12 +286,15 @@ public final class CastHTTPServer: @unchecked Sendable {
         public func finish() { close() }
     }
 
-    public func setStreamRoute(_ path: String, handler: (@Sendable (StreamWriter) -> Void)?) {
+    public func setStreamRoute(
+        _ path: String, contentType: String = "video/mp4",
+        handler: (@Sendable (StreamWriter) -> Void)?
+    ) {
         // Same reasoning as `register(file:)`: called from the main actor,
         // and the queue it would block on is servicing live connections.
         queue.async { [weak self] in
             if let handler {
-                self?.streamRoutes[path] = handler
+                self?.streamRoutes[path] = (contentType, handler)
             } else {
                 self?.streamRoutes.removeValue(forKey: path)
             }
