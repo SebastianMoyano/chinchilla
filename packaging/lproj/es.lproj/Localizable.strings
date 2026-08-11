@@ -196,6 +196,10 @@
 "Couldn't check for updates." = "No se pudo comprobar si hay actualizaciones.";
 "Sponsor" = "Apoyar";
 "Get %@" = "Bajar %@";
+/* Memory quit prompts — the accused is named in the sentence */
+"%@ is holding about %@ while your Mac is swapping, and you haven't had it open all day. %@ will be asked to close, so anything unsaved still gets its own prompt." = "%@ retiene unos %@ mientras tu Mac usa swap, y no la has tenido abierta en todo el día. Se le pedirá a %@ que se cierre, así que cualquier cosa sin guardar mostrará su propio aviso.";
+"%@ is holding %@ and hasn't done anything for %@." = "%@ retiene %@ y no ha hecho nada en %@.";
+
 /* DLNA experimental mirroring */
 "Files, and mirroring on sets that accept a live stream — several seconds behind" = "Archivos, y espejo en televisores que acepten video en vivo — con varios segundos de retraso";
 "Experimental on this TV: DLNA wasn't built for live video. Many sets play it a few seconds behind; some only handle finished files — if so, it says so here." = "Experimental en este televisor: DLNA no se diseñó para video en vivo. Muchos lo reproducen con unos segundos de retraso; algunos solo aceptan archivos terminados — si es el caso, aquí lo dirá.";

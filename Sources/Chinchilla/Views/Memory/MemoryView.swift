@@ -93,7 +93,11 @@ private struct MemoryPlanCard: View {
                 }
                 Button("Not now", role: .cancel) { everyday.pendingQuit = nil }
             } message: { action in
-                Text("It's holding about \(Formatters.bytes(action.estimatedBytes)) while your Mac is swapping, and you haven't had it open all day. It will be asked to close, so anything unsaved still gets its own prompt.")
+                // The accused is named in the sentence itself. "It's holding…"
+                // relied on the title for the antecedent, and a user reading
+                // just the body concluded Chinchilla was offering to close
+                // *itself* — the only name anywhere near the text was ours.
+                Text("\(action.target) is holding about \(Formatters.bytes(action.estimatedBytes)) while your Mac is swapping, and you haven't had it open all day. \(action.target) will be asked to close, so anything unsaved still gets its own prompt.")
             }
         }
     }

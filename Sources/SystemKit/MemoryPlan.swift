@@ -254,7 +254,10 @@ public enum MemoryPlan {
         let span = minutes >= 120
             ? String(localized: "\(minutes / 60) hours")
             : String(localized: "\(minutes) minutes")
-        return String(localized: "It's holding \(size) and hasn't done anything for \(span).")
+        // The app is named in the sentence, not just in a title somewhere
+        // above it — a body that says "it" gets read against whatever name
+        // is nearest, which in a notification is the *sender's*.
+        return String(localized: "\(hog.name) is holding \(size) and hasn't done anything for \(span).")
     }
 
     static let browserNames: Set<String> = [
