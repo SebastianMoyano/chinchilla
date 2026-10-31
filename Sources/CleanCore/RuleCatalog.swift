@@ -17,7 +17,25 @@ public enum RuleCatalog {
         // go-build run to multiple GB — only for the path-dedupe in
         // CleanScanner to throw one of the two results away.
         "Yarn", "Homebrew", "org.swift.swiftpm", "CocoaPods", "pip", "go-build",
+        // Not caches despite the address: llama.cpp keeps the models it
+        // downloaded here (gigabytes nobody wants to fetch twice), and kitty's
+        // graphics cache backs images on screen in open terminals.
+        "llama.cpp", "kitty",
+        // Playwright MCP keeps whole browser profiles here (logins included),
+        // and the browser builds get their own rule that waits for them.
+        "ms-playwright", "ms-playwright-go", "ms-playwright-mcp",
     ]
+
+    /// Every way a simulator can be running: the Simulator app, or a device
+    /// booted headless by `simctl`/Xcode, which shows up as `launchd_sim`.
+    static let simulatorBundleIDs = ["com.apple.dt.Xcode", "com.apple.iphonesimulator"]
+    static let simulatorProcesses = ["launchd_sim"]
+
+    /// Chromium-style caches an Electron app keeps next to its data.
+    static func electronCaches(_ appSupportFolder: String) -> [String] {
+        let base = "~/Library/Application Support/" + appSupportFolder
+        return [base + "/Cache", base + "/Code Cache", base + "/GPUCache"]
+    }
 
     static let appleCachesAllowlist: Set<String> = [
         "com.apple.dt.Xcode", "com.apple.python",
@@ -117,6 +135,69 @@ public enum RuleCatalog {
             conflictingBundleIDs: ["com.apple.Safari"]
         ),
 
+        // ── Apps that cache like a browser ────────────────────────────
+        CleanRule(
+            id: "apps.discord",
+            category: .userCaches,
+            title: "Discord Cache",
+            patterns: electronCaches("discord"),
+            safety: .safe,
+            contentsOnly: true,
+            conflictingBundleIDs: ["com.hnc.Discord"]
+        ),
+        CleanRule(
+            id: "apps.vesktop",
+            category: .userCaches,
+            title: "Vesktop Cache",
+            patterns: electronCaches("vesktop"),
+            safety: .safe,
+            contentsOnly: true,
+            conflictingBundleIDs: ["dev.vencord.vesktop"]
+        ),
+        CleanRule(
+            id: "apps.slack",
+            category: .userCaches,
+            title: "Slack Cache",
+            patterns: electronCaches("Slack"),
+            safety: .safe,
+            contentsOnly: true,
+            conflictingBundleIDs: ["com.tinyspeck.slackmacgap"]
+        ),
+        CleanRule(
+            id: "apps.adobe.mediacache",
+            category: .userCaches,
+            title: "Adobe Media Cache",
+            patterns: [
+                "~/Library/Application Support/Adobe/Common/Media Cache Files",
+                "~/Library/Application Support/Adobe/Common/Media Cache",
+            ],
+            // Conformed audio and peak files: Premiere rebuilds them on the
+            // next open, but not while it is reading them. Adobe puts the
+            // year in each bundle ID, hence the prefixes.
+            safety: .safe,
+            contentsOnly: true,
+            conflictingBundleIDs: [
+                "com.adobe.PremierePro*", "com.adobe.AfterEffects*",
+                "com.adobe.Audition*", "com.adobe.ame*", "com.adobe.PremiereRush*",
+            ]
+        ),
+        CleanRule(
+            id: "apps.mail.attachments",
+            category: .userCaches,
+            title: "Mail Attachments Opened from Messages",
+            patterns: ["~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads/*"],
+            // Copies Mail made when an attachment was opened; the message
+            // still has the original. One folder per attachment — only those
+            // nobody edited go, since an edited copy may be the only one with
+            // the user's changes. To the Trash, and never pre-selected.
+            safety: .moderate,
+            deleteMode: .trash,
+            minAgeHours: 24 * 7,
+            requiresFullDiskAccess: true,
+            conflictingBundleIDs: ["com.apple.mail"],
+            untouchedOnly: true
+        ),
+
         // ── Logs ──────────────────────────────────────────────────────
         CleanRule(
             id: "logs.user",
@@ -173,7 +254,10 @@ public enum RuleCatalog {
             category: .developer,
             title: "Simulator Caches",
             patterns: ["~/Library/Developer/CoreSimulator/Caches/*"],
-            safety: .safe
+            safety: .safe,
+            // Booted simulators map the dyld caches in here.
+            conflictingBundleIDs: simulatorBundleIDs,
+            conflictingProcessNames: simulatorProcesses
         ),
         CleanRule(
             id: "dev.xcode.devicesupport",
@@ -213,7 +297,8 @@ public enum RuleCatalog {
             safety: .caution,
             deleteMode: .trash,
             skipNames: ["device_set.plist"],
-            conflictingBundleIDs: ["com.apple.dt.Xcode", "com.apple.iphonesimulator"]
+            conflictingBundleIDs: simulatorBundleIDs,
+            conflictingProcessNames: simulatorProcesses
         ),
         CleanRule(
             id: "dev.simulator.runtimes",
@@ -223,7 +308,8 @@ public enum RuleCatalog {
             // Xcode re-downloads a runtime on demand; deleting one that a
             // device still points at makes that device unavailable.
             safety: .caution,
-            conflictingBundleIDs: ["com.apple.dt.Xcode"]
+            conflictingBundleIDs: simulatorBundleIDs,
+            conflictingProcessNames: simulatorProcesses
         ),
         CleanRule(
             id: "dev.xcode.devicelogs",
@@ -307,6 +393,76 @@ public enum RuleCatalog {
             patterns: ["~/Library/Caches/go-build"],
             safety: .safe,
             contentsOnly: true
+        ),
+        CleanRule(
+            id: "dev.uv",
+            category: .developer,
+            title: "uv Cache",
+            patterns: ["~/.cache/uv"],
+            // Installed environments hold clones of these files, not links
+            // into them — but a running `uv`/`uvx` (an MCP server, a script)
+            // may be reading its environment straight out of the cache.
+            safety: .safe,
+            contentsOnly: true,
+            conflictingProcessNames: ["uv", "uvx"],
+            sizeByReclaimable: true
+        ),
+        CleanRule(
+            id: "dev.bun",
+            category: .developer,
+            title: "Bun Install Cache",
+            patterns: ["~/.bun/install/cache"],
+            // Same deal: node_modules are clones, a live `bun install` is not.
+            safety: .safe,
+            contentsOnly: true,
+            conflictingProcessNames: ["bun"],
+            sizeByReclaimable: true
+        ),
+        CleanRule(
+            id: "dev.go.modcache",
+            category: .developer,
+            title: "Go Module Cache",
+            patterns: ["~/go/pkg/mod"],
+            // Every module any project downloaded; `go` fetches them again on
+            // the next build, which an offline Mac can't do — so not
+            // pre-selected. Go makes the tree read-only to stop edits.
+            safety: .moderate,
+            contentsOnly: true,
+            conflictingProcessNames: ["go"],
+            unlockReadOnlyTree: true
+        ),
+        CleanRule(
+            id: "dev.playwright.browsers",
+            category: .developer,
+            title: "Playwright Browsers",
+            patterns: [
+                "~/Library/Caches/ms-playwright/chromium*",
+                "~/Library/Caches/ms-playwright/firefox-*",
+                "~/Library/Caches/ms-playwright/webkit-*",
+                "~/Library/Caches/ms-playwright/ffmpeg-*",
+                "~/Library/Caches/ms-playwright-go/*/chromium*",
+                "~/Library/Caches/ms-playwright-go/*/firefox-*",
+                "~/Library/Caches/ms-playwright-go/*/webkit-*",
+            ],
+            // Re-downloaded by `playwright install`; until then tests can't
+            // start, so not pre-selected — and never under a running browser.
+            safety: .moderate,
+            conflictingProcessNames: [
+                "Google Chrome for Testing", "chrome-headless-shell",
+                "headless_shell", "Chromium", "firefox", "Playwright",
+            ]
+        ),
+        CleanRule(
+            id: "dev.claude.versions",
+            category: .developer,
+            title: "Old Claude Code Versions",
+            patterns: ["~/.local/share/claude/versions/*"],
+            // The installer keeps every release it ever updated to. The one
+            // `claude` points at stays, and so does any older one a session
+            // that hasn't been restarted is still running on.
+            safety: .safe,
+            keepTargetsOf: ["~/.local/bin/claude"],
+            keepRunningExecutables: true
         ),
     ]
 }

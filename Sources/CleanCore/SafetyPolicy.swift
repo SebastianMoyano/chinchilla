@@ -49,6 +49,9 @@ public enum SafetyPolicy {
         "CloudKit", "com.apple.bird", "FamilyCircle", "com.apple.ak",
         "HomeKit", "com.apple.homed", "com.apple.passd", "com.apple.Wallet",
         "com.apple.containermanagerd", "com.apple.TCC", "MobileAsset",
+        "/Caches/llama.cpp",  // downloaded models, not a cache
+        "/.cache/huggingface",  // same, for every Hugging Face library
+        "/Caches/ms-playwright-mcp",  // browser profiles with live logins
     ]
 
     static let resolvedDenyPrefixes: [String] = denyPrefixes.map(resolve)

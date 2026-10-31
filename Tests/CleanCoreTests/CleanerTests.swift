@@ -70,3 +70,35 @@ private func makeFixture() throws -> (root: String, rule: CleanRule) {
     #expect(outcome.deletedPaths.isEmpty)
     #expect(outcome.failures.count == 1)
 }
+
+@Test func readOnlyTreeIsUnlockedThenRemoved() async throws {
+    // Go's module cache: folders without owner-write, so a plain unlink of
+    // anything inside them fails with EACCES.
+    let root = NSHomeDirectory() + "/Library/Caches/chinchilla-test-\(UUID().uuidString)"
+    let fm = FileManager.default
+    let module = root + "/mod/example.com/lib@v1.0.0"
+    try fm.createDirectory(atPath: module + "/sub", withIntermediateDirectories: true)
+    try Data(count: 4096).write(to: URL(fileURLWithPath: module + "/sub/a.go"))
+    chmod(module + "/sub", 0o555)
+    chmod(module, 0o555)
+    defer {
+        Cleaner.grantOwnerWrite(under: root)
+        try? fm.removeItem(atPath: root)
+    }
+
+    let rule = CleanRule(
+        id: "test.readonly", category: .developer, title: "Test",
+        patterns: [root + "/mod"], safety: .safe, contentsOnly: true,
+        unlockReadOnlyTree: true
+    )
+    let item = CleanItem(
+        ruleID: rule.id, category: .developer, path: root + "/mod",
+        size: 4096, modified: .distantPast, safety: .safe,
+        deleteMode: .unlink, contentsOnly: true
+    )
+    let outcome = await Cleaner.clean(items: [item], dryRun: false, rules: [rule])
+
+    #expect(outcome.failures.isEmpty)
+    #expect(!fm.fileExists(atPath: root + "/mod/example.com"))
+    #expect(fm.fileExists(atPath: root + "/mod"))
+}

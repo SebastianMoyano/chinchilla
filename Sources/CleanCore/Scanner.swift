@@ -1,6 +1,7 @@
 import Foundation
 import Darwin
 import DiskScanKit
+import SystemKit
 
 public enum CleanScanner {
     /// Scans all rules and returns cleanable items with sizes.
@@ -58,6 +59,10 @@ public enum CleanScanner {
     private static func matchCandidates(_ rule: CleanRule) -> [Candidate] {
         var candidates: [Candidate] = []
         let now = Date()
+        let kept = Set(rule.keepTargetsOf.map {
+            (($0 as NSString).expandingTildeInPath as NSString).resolvingSymlinksInPath
+        })
+        let running = rule.keepRunningExecutables ? ProcessNames.executablePaths() : []
         for pattern in rule.patterns {
             for path in expand(pattern: pattern) {
                 let name = (path as NSString).lastPathComponent
@@ -83,10 +88,41 @@ public enum CleanScanner {
                    now.timeIntervalSince(modified) < rule.minAgeHours * 3600 {
                     continue
                 }
+                if !kept.isEmpty || !running.isEmpty {
+                    let real = (path as NSString).resolvingSymlinksInPath
+                    if kept.contains(real) { continue }
+                    if running.contains(where: { $0.isUnder(real) }) { continue }
+                }
+                if rule.untouchedOnly {
+                    guard isDirectory,
+                          now.timeIntervalSince(modified) >= rule.minAgeHours * 3600,
+                          isUntouched(directory: path) else { continue }
+                }
                 candidates.append(Candidate(path: path, modified: modified))
             }
         }
         return candidates
+    }
+
+    /// True if every file in `directory` still carries the modification time
+    /// it was created with — a saved attachment nobody opened and changed.
+    /// Folders too big to check cheaply count as touched: these are meant to
+    /// hold one or two files, and when in doubt the folder stays.
+    static func isUntouched(directory: String, maxEntries: Int = 256) -> Bool {
+        guard let walker = FileManager.default.enumerator(atPath: directory) else { return false }
+        var seen = 0
+        while let relative = walker.nextObject() as? String {
+            seen += 1
+            if seen > maxEntries { return false }
+            var st = stat()
+            let path = (directory as NSString).appendingPathComponent(relative)
+            guard lstat(path, &st) == 0 else { return false }
+            guard st.st_mode & S_IFMT == S_IFREG else { continue }
+            // Two seconds of slack: the writer may stamp the time after the
+            // last byte lands.
+            if st.st_mtimespec.tv_sec > st.st_birthtimespec.tv_sec + 2 { return false }
+        }
+        return true
     }
 
     /// Phase 2: size every match in parallel — each hop already goes through
@@ -101,7 +137,9 @@ public enum CleanScanner {
                 group.addTask {
                     if isCancelled?() == true { return nil }
                     let size = await Blocking.run {
-                        DiskSize.allocated(at: candidate.path, isCancelled: isCancelled)
+                        rule.sizeByReclaimable
+                            ? DiskSize.reclaimable(at: candidate.path, isCancelled: isCancelled)
+                            : DiskSize.allocated(at: candidate.path, isCancelled: isCancelled)
                     }
                     guard size > 0 else { return nil }
                     return CleanItem(

@@ -28,7 +28,25 @@ public struct CleanRule: Sendable, Identifiable {
     public let extensions: Set<String>
     public let applePolicy: AppleBundlePolicy
     /// Bundle IDs whose apps should be quit before cleaning these items.
+    /// A trailing `*` matches by prefix — Adobe puts the year in theirs.
     public let conflictingBundleIDs: [String]
+    /// Process names (as `proc_name` reports them) that use these items while
+    /// alive: command-line tools and daemons have no bundle ID to watch.
+    public let conflictingProcessNames: [String]
+    /// For directory matches: keep the folder unless it is at least
+    /// `minAgeHours` old and no file in it changed after it was created —
+    /// anything edited after the fact is the user's work, not a copy.
+    public let untouchedOnly: Bool
+    /// Size items by what deleting them frees, not what they occupy: for
+    /// caches that installs clone out of (APFS shares the blocks).
+    public let sizeByReclaimable: Bool
+    /// The tree is made read-only by its owner (Go's module cache); grant
+    /// ourselves write permission on its folders before removing it.
+    public let unlockReadOnlyTree: Bool
+    /// Symlinks whose targets must stay (e.g. the CLI's current version).
+    public let keepTargetsOf: [String]
+    /// Skip matches that are, or contain, a running program's executable.
+    public let keepRunningExecutables: Bool
 
     public init(
         id: String,
@@ -43,7 +61,13 @@ public struct CleanRule: Sendable, Identifiable {
         skipNames: Set<String> = [],
         extensions: Set<String> = [],
         applePolicy: AppleBundlePolicy = .include,
-        conflictingBundleIDs: [String] = []
+        conflictingBundleIDs: [String] = [],
+        conflictingProcessNames: [String] = [],
+        untouchedOnly: Bool = false,
+        sizeByReclaimable: Bool = false,
+        unlockReadOnlyTree: Bool = false,
+        keepTargetsOf: [String] = [],
+        keepRunningExecutables: Bool = false
     ) {
         self.id = id
         self.category = category
@@ -58,6 +82,24 @@ public struct CleanRule: Sendable, Identifiable {
         self.extensions = extensions
         self.applePolicy = applePolicy
         self.conflictingBundleIDs = conflictingBundleIDs
+        self.conflictingProcessNames = conflictingProcessNames
+        self.untouchedOnly = untouchedOnly
+        self.sizeByReclaimable = sizeByReclaimable
+        self.unlockReadOnlyTree = unlockReadOnlyTree
+        self.keepTargetsOf = keepTargetsOf
+        self.keepRunningExecutables = keepRunningExecutables
+    }
+
+    /// True while an app or tool that uses this rule's items is running.
+    public func conflicts(
+        runningBundleIDs: Set<String>, runningProcessNames: Set<String>
+    ) -> Bool {
+        if conflictingProcessNames.contains(where: runningProcessNames.contains) { return true }
+        return conflictingBundleIDs.contains { declared in
+            guard declared.hasSuffix("*") else { return runningBundleIDs.contains(declared) }
+            let prefix = declared.dropLast()
+            return runningBundleIDs.contains { $0.hasPrefix(prefix) }
+        }
     }
 
     /// Directory roots this rule may delete under — used by SafetyPolicy.

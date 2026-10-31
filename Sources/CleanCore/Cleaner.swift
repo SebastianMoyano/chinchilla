@@ -60,7 +60,8 @@ public enum Cleaner {
                 var deletedAny = false
                 for child in children {
                     let childPath = (item.path as NSString).appendingPathComponent(child)
-                    switch delete(path: childPath, roots: roots, mode: item.deleteMode, dryRun: dryRun) {
+                    switch delete(path: childPath, roots: roots, mode: item.deleteMode,
+                                  unlock: rule.unlockReadOnlyTree, dryRun: dryRun) {
                     case .success:
                         deletedAny = true
                     case .failure(let failure):
@@ -76,7 +77,8 @@ public enum Cleaner {
                     outcome.deletedPaths.append(item.path + "/*")
                 }
             } else {
-                switch delete(path: item.path, roots: roots, mode: item.deleteMode, dryRun: dryRun) {
+                switch delete(path: item.path, roots: roots, mode: item.deleteMode,
+                              unlock: rule.unlockReadOnlyTree, dryRun: dryRun) {
                 case .success:
                     outcome.freedBytes += item.size
                     outcome.deletedPaths.append(item.path)
@@ -93,7 +95,7 @@ public enum Cleaner {
     }
 
     private static func delete(
-        path: String, roots: [String], mode: DeleteMode, dryRun: Bool
+        path: String, roots: [String], mode: DeleteMode, unlock: Bool = false, dryRun: Bool
     ) -> Result<Void, CleanFailure> {
         let target: String
         do {
@@ -107,6 +109,7 @@ public enum Cleaner {
         if dryRun { return .success(()) }
         do {
             let url = URL(fileURLWithPath: target)
+            if unlock { grantOwnerWrite(under: target) }
             switch mode {
             case .trash:
                 try FileManager.default.trashItem(at: url, resultingItemURL: nil)
@@ -116,6 +119,23 @@ public enum Cleaner {
             return .success(())
         } catch {
             return .failure(CleanFailure(path: path, reason: error.localizedDescription))
+        }
+    }
+
+    /// Adds owner-write to every folder in `root` (already validated) so its
+    /// entries can be unlinked — what `go clean -modcache` does before it
+    /// removes the cache. Never follows symlinks or crosses volumes.
+    static func grantOwnerWrite(under root: String) {
+        var argv: [UnsafeMutablePointer<CChar>?] = [strdup(root), nil]
+        defer { free(argv[0]) }
+        guard let ftsp = fts_open(&argv, FTS_PHYSICAL | FTS_NOCHDIR | FTS_XDEV, nil) else { return }
+        defer { fts_close(ftsp) }
+        while let ent = fts_read(ftsp) {
+            // Pre-order: unlock a folder before fts reads into it.
+            guard Int32(ent.pointee.fts_info) == FTS_D,
+                  let st = ent.pointee.fts_statp?.pointee,
+                  st.st_mode & S_IWUSR == 0 else { continue }
+            chmod(ent.pointee.fts_path, (st.st_mode & 0o7777) | S_IWUSR)
         }
     }
 

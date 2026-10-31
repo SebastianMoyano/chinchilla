@@ -26,16 +26,13 @@ final class DeepCleanModel {
     /// ON = preview only. The user must flip it to actually delete.
     var dryRun = true
     var outcome: CleanOutcome?
-    /// Bundle IDs of running apps that conflict with some items (browsers).
-    var runningConflicts: Set<String> = []
+    /// Rules whose app or tool is running (browsers, Xcode, uv…), refreshed
+    /// after each scan so rows look it up instead of enumerating processes.
+    var conflictingRuleIDs: Set<String> = []
     var hasFullDiskAccess = true
     /// Fired when a scan replaces the report, so whoever derives numbers from
     /// it can do that work once instead of per render.
     var onReportChanged: (@MainActor () -> Void)?
-
-    private static let rulesByID = Dictionary(
-        uniqueKeysWithValues: RuleCatalog.rules.map { ($0.id, $0) }
-    )
 
     var selectedItems: [CleanItem] {
         report.items(ids: selected)
@@ -85,8 +82,7 @@ final class DeepCleanModel {
     }
 
     func itemHasConflict(_ item: CleanItem) -> Bool {
-        guard let rule = Self.rulesByID[item.ruleID] else { return false }
-        return rule.conflictingBundleIDs.contains { runningConflicts.contains($0) }
+        conflictingRuleIDs.contains(item.ruleID)
     }
 
     func scan() {
@@ -128,12 +124,7 @@ final class DeepCleanModel {
     }
 
     func refreshRunningConflicts() {
-        let allConflicts = Set(RuleCatalog.rules.flatMap(\.conflictingBundleIDs))
-        runningConflicts = Set(
-            NSWorkspace.shared.runningApplications
-                .compactMap(\.bundleIdentifier)
-                .filter { allConflicts.contains($0) }
-        )
+        conflictingRuleIDs = RunningAppGuard.conflictingRuleIDs()
     }
 
     func toggleCategory(_ category: CleanCategory) {
